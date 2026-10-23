@@ -51,22 +51,37 @@ std::string AIClient::ask(const std::string& prompt) const {
         throw std::invalid_argument("The prompt cannot be empty.");
     }
 
-    const json requestBody = {
-        {"model", model_},
-        {"messages", json::array({
-            {
-                {"role", "user"},
-                {"content", prompt}
-            }
-        })},
-        {"stream", false},
-        {"think", false},
-        {"keep_alive", "5m"},
-        {"options", {
-            {"num_predict", 256},
-            {"temperature", 0.4}
-        }}
-    };
+    
+        const json requestBody = {
+            {"model", model_},
+            {"messages", json::array({
+                {
+                    {"role", "system"},
+                    {"content",
+                        "You are NUMERICK, a personal AI assistant. "
+                        "Answer the user's actual question directly. "
+                        "For ordinary questions, prefer a concise answer "
+                        "of 2-5 sentences. For simple explanations, aim "
+                        "for fewer than 120 words unless more detail is "
+                        "requested. Use clear language and formatting. "
+                        "Never claim to have performed an action unless "
+                        "it was actually performed and verified."
+                    }
+                },
+                {
+                    {"role", "user"},
+                    {"content", prompt}
+                }
+            })},
+            {"stream", false},
+            {"think", false},
+            {"keep_alive", "5m"},
+            {"options", {
+                {"num_predict", 512},
+                {"temperature", 0.4}
+            }}
+        };
+
 
     const std::string payload = requestBody.dump();
 
@@ -202,7 +217,18 @@ std::string AIClient::ask(const std::string& prompt) const {
         );
     }
 
-    return response["message"]["content"].get<std::string>();
+    
+    const std::string content =
+        response["message"]["content"].get<std::string>();
+
+    if (response.value("done_reason", std::string{}) == "length") {
+        return content +
+            "\n\n[NUMERICK: The response may be incomplete "
+            "because the output limit was reached.]";
+    }
+
+    return content;
+
 }
 
 } // namespace numerick

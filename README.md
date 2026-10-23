@@ -9,7 +9,7 @@ project with a C++ core.
 
 
 
-## Current milestone: 0.2.0
+## Current milestone: 0.3.0
 
 - Interactive C++ command-line interface
 - Basic command recognition
@@ -20,6 +20,8 @@ project with a C++ core.
 - HTTP communication through Windows WinHTTP
 - JSON request and response handling
 - Error handling for AI requests
+- separate command parser
+- utomated parser tests
 
 ## Current AI setup
 

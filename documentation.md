@@ -490,6 +490,45 @@ Individual command tests and automated tests should be recorded separately as th
 - Add automated tests.
 
 
+### Version 0.3.0 — Command parser and automated tests
+
+**Status: Implemented; initial manual and automated tests passed.**
+
+**Changes:**
+
+- Added a dedicated command parser interface.
+- Implemented command recognition in `src/core/command_parser.cpp`.
+- Separated command parsing from the main application loop.
+- Added automated tests in `tests/command_parser_tests.cpp`.
+- Covered command aliases, capitalization, whitespace, AI prompt preservation, empty input, and unknown commands.
+- Integrated the parser with the existing local AI client.
+- Improved the default AI response instructions and increased the output token limit.
+- Added reporting when Ollama indicates that an answer ended because the output limit was reached.
+- Updated CMake configuration to include the parser and register its automated tests.
+
+**Verified behaviour:**
+
+- Automated parser tests printed `All command parser tests passed.`
+- The application recognized mixed-case commands such as `HeY`.
+- AI requests were sent to the local Qwen model and returned complete answers in the latest manual test.
+- Empty AI requests produced usage instructions.
+- Unsupported commands were handled without attempting arbitrary actions.
+- The status and help commands continued to work.
+- The application remained interactive after responding.
+
+**Current limitations:**
+
+- Natural-language requests still require the `ask` prefix.
+- Conversation history is not maintained across AI requests.
+- Voice, visual understanding, persistent memory, and computer automation remain unimplemented.
+- AI client failure scenarios need further automated testing.
+
+**Next objective:**
+
+Improve automated test coverage and establish a controlled tool interface before introducing computer automation.
+
+
+
 ### Version 0.2.0 — Initial local AI integration
 
 **Status: Implemented; initial manual test passed.**

@@ -1,9 +1,7 @@
-
 #include "numerick/ai_client.hpp"
+#include "numerick/command_parser.hpp"
 
-#include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -42,59 +40,30 @@ public:
                 break;
             }
 
-            const std::string command = normalize(input);
+            const numerick::ParsedCommand command =
+                numerick::parseCommand(input);
 
-            if (command.empty()) {
+            if (command.type == numerick::CommandType::Unknown &&
+                command.argument.empty()) {
                 continue;
             }
 
-            // Do not write AI prompt contents to the activity log.
-            if (command.rfind("ask ", 0) == 0) {
+            // Avoid storing the contents of AI prompts in the log.
+            if (command.type == numerick::CommandType::Ask) {
                 log("AI request submitted");
             } else {
-                log("Input received: " + command);
+                log("Input received: " + input);
             }
 
-            if (command == "exit" || command == "quit") {
-                std::cout
-                    << "NUMERICK > Shutting down. Goodbye.\n";
+            if (!handleCommand(command)) {
                 break;
             }
-
-            handleCommand(input);
         }
     }
 
 private:
     std::ofstream logFile;
     numerick::AIClient aiClient;
-
-    static std::string trim(const std::string& text) {
-        const auto first = text.find_first_not_of(" \t\r\n");
-
-        if (first == std::string::npos) {
-            return "";
-        }
-
-        const auto last = text.find_last_not_of(" \t\r\n");
-
-        return text.substr(first, last - first + 1);
-    }
-
-    static std::string normalize(std::string text) {
-        text = trim(text);
-
-        std::transform(
-            text.begin(),
-            text.end(),
-            text.begin(),
-            [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            }
-        );
-
-        return text;
-    }
 
     static std::string currentTime() {
         const auto now = std::chrono::system_clock::now();
@@ -136,57 +105,58 @@ private:
             << "          N U M E R I C K\n"
             << "       Personal Assistant Core\n"
             << "====================================\n"
-            << "Core version: 0.2.0\n"
+            << "Core version: 0.3.0\n"
             << "AI model: Qwen 3.5 4B via Ollama\n"
             << "Type 'help' to see available commands.\n";
     }
 
-    void handleCommand(const std::string& input) {
-        const std::string command = normalize(input);
+    bool handleCommand(const numerick::ParsedCommand& command) {
+        using numerick::CommandType;
 
-        if (command == "help" || command == "commands") {
+        switch (command.type) {
+        case CommandType::Help:
             showHelp();
-        }
-        else if (command == "hello" ||
-                 command == "hi" ||
-                 command == "hey") {
+            break;
+
+        case CommandType::Greeting:
             std::cout
                 << "NUMERICK > Hello. I'm online and ready.\n";
-        }
-        else if (command == "status") {
+            break;
+
+        case CommandType::Status:
             showStatus();
-        }
-        else if (command == "time") {
+            break;
+
+        case CommandType::Time:
             std::cout
                 << "NUMERICK > Local time: "
                 << currentTime() << '\n';
-        }
-        else if (command == "clear") {
+            break;
+
+        case CommandType::Clear:
 #ifdef _WIN32
             std::system("cls");
 #else
             std::system("clear");
 #endif
             printWelcome();
-        }
-        else if (command.rfind("ask ", 0) == 0) {
-            const std::string cleaned = trim(input);
-            const std::string prompt = trim(cleaned.substr(4));
+            break;
 
-            if (prompt.empty()) {
+        case CommandType::Ask:
+            if (command.argument.empty()) {
                 std::cout
                     << "NUMERICK > Usage: ask <your question>\n";
-                return;
+                break;
             }
 
             std::cout << "NUMERICK > Thinking...\n";
 
             try {
-                const std::string answer = aiClient.ask(prompt);
+                const std::string answer =
+                    aiClient.ask(command.argument);
 
-                std::cout
-                    << "\nNUMERICK > "
-                    << answer << '\n';
+                std::cout << "\nNUMERICK > "
+                          << answer << '\n';
 
                 log("AI response received");
             }
@@ -201,14 +171,23 @@ private:
                     std::string(error.what())
                 );
             }
-        }
-        else {
+            break;
+
+        case CommandType::Exit:
             std::cout
-                << "NUMERICK > I don't understand that command "
+                << "NUMERICK > Shutting down. Goodbye.\n";
+            return false;
+
+        case CommandType::Unknown:
+            std::cout
+                << "NUMERICK > I don't recognize that command "
                 << "yet. Try 'help' or 'ask <question>'.\n";
 
-            log("Unsupported command: " + command);
+            log("Unsupported command: " + command.argument);
+            break;
         }
+
+        return true;
     }
 
     void showHelp() const {
@@ -245,9 +224,8 @@ int main() {
         assistant.run();
     }
     catch (const std::exception& error) {
-        std::cerr
-            << "NUMERICK error: "
-            << error.what() << '\n';
+        std::cerr << "NUMERICK error: "
+                  << error.what() << '\n';
 
         return 1;
     }
