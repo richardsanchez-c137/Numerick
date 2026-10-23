@@ -31,12 +31,11 @@ add_executable(numerick
 )
 
 target_include_directories(numerick PRIVATE include)
-
 target_link_libraries(numerick PRIVATE winhttp)
 
 numerick_enable_warnings(numerick)
 
-# Automated command parser tests
+# Automated tests
 enable_testing()
 
 add_executable(command_parser_tests
@@ -45,10 +44,22 @@ add_executable(command_parser_tests
 )
 
 target_include_directories(command_parser_tests PRIVATE include)
-
 numerick_enable_warnings(command_parser_tests)
 
 add_test(
     NAME command_parser_tests
     COMMAND command_parser_tests
+)
+
+add_executable(tool_registry_tests
+    tests/tool_registry_tests.cpp
+    src/tools/tool_registry.cpp
+)
+
+target_include_directories(tool_registry_tests PRIVATE include)
+numerick_enable_warnings(tool_registry_tests)
+
+add_test(
+    NAME tool_registry_tests
+    COMMAND tool_registry_tests
 )

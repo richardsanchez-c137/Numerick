@@ -603,6 +603,53 @@ Do not mark a feature as implemented merely because code has been written. Its a
 
 Keep this document factual. Distinguish implemented features from planned work and distinguish successful tests from assumptions.
 
+
+### Tool Registry — Initial implementation
+
+**Status: Implemented and tested in isolation.**
+
+**Files added:**
+
+- `include/numerick/tool_registry.hpp`
+- `src/tools/tool_registry.cpp`
+- `tests/tool_registry_tests.cpp`
+
+**Build integration:**
+
+- Registered the tool-registry test executable in CMake.
+- Added the tool-registry test to CTest.
+- Kept the registry separate from the main assistant executable.
+- Preserved the existing AI client and command parser integration.
+
+**Verified behaviour:**
+
+- Registered tools can be discovered by name.
+- Tool definitions can be inspected.
+- Registered handlers can execute successfully.
+- Unknown tools are rejected.
+- Non-object JSON arguments are rejected.
+- Handler-level validation errors are returned as failures.
+- Duplicate tool registrations are rejected.
+- Exceptions from handlers are converted into failure results.
+
+**Test results:**
+
+- Command parser tests: Passed.
+- Tool registry tests: Passed.
+- CTest: 2 of 2 tests passed.
+- Main application: Manual verification passed after the CMake build.
+
+**Current limitations:**
+
+- The tool registry is not yet connected to the AI client's response handling.
+- AI-generated tool requests are not executed.
+- Parameter schemas are stored but not fully validated against JSON Schema.
+- No real operating-system tools have been registered.
+- Permission policies and approval workflows remain future work.
+
+**Next objective:**
+
+Connect AI-generated tool requests to the registry through a controlled execution layer, beginning with harmless, read-only tools.
 ---
 
 **End of current documentation — NUMERICK v0.1.0**

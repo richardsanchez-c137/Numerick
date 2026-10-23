@@ -107,3 +107,37 @@ cmake --build build
 
 Early development. AI, voice, vision, and automation
 integrations have not yet been implemented.
+
+
+## Automated tests
+
+NUMERICK uses CMake and CTest to build and run its automated tests.
+
+Configure the project:
+
+```powershell
+cmake -S . -B build -G "MinGW Makefiles"
+```
+
+Build all targets:
+
+```powershell
+cmake --build build
+```
+
+Run the tests:
+
+```powershell
+ctest --test-dir build --output-on-failure
+```
+
+Current test suites:
+
+- `command_parser_tests`: checks command recognition and input handling.
+- `tool_registry_tests`: checks registration, lookup, execution, and failure handling.
+
+## Tool registry status
+
+The initial tool registry is implemented and tested independently.
+
+It is not yet connected to AI-generated tool calls, and it does not currently perform real computer operations.
