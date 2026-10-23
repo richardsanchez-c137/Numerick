@@ -1,0 +1,28 @@
+
+# Build output
+build/
+cmake-build-*/
+out/
+
+# Compiled binaries and object files
+*.exe
+*.o
+*.obj
+*.a
+*.dll
+*.so
+
+# Local data and logs
+data/
+logs/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
