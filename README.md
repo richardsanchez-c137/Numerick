@@ -6,13 +6,61 @@
 NUMERICK is an evolving Windows-focused personal assistant
 project with a C++ core.
 
-## Current milestone: 0.1.0
 
-- Interactive command-line interface
+
+
+## Current milestone: 0.2.0
+
+- Interactive C++ command-line interface
 - Basic command recognition
 - Local activity logging
 - System status reporting
-- C++17 foundation
+- Local AI integration through Ollama
+- Qwen 3.5 4B model support
+- HTTP communication through Windows WinHTTP
+- JSON request and response handling
+- Error handling for AI requests
+
+## Current AI setup
+
+Install Ollama and download the model:
+
+```powershell
+ollama pull qwen3.5:4b
+```
+
+Ensure Ollama is running, then compile NUMERICK from the project root:
+
+```powershell
+g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude src/main.cpp src/core/ai_client.cpp -o numerick.exe -lwinhttp
+```
+
+Run the application:
+
+```powershell
+.\numerick.exe
+```
+
+Ask a question:
+
+```text
+ask Explain what an API is using a restaurant analogy.
+```
+
+NUMERICK currently sends each question to the local Ollama service.
+The conversation history is not yet retained by the AI client.
+
+## Still planned
+
+- Natural voice conversations
+- Camera and visual understanding
+- Persistent conversational memory
+- Web research tools
+- Controlled Windows automation
+- Git workflow assistance
+- Automated tests and stronger reliability controls
+- Dedicated graphical frontend
+
 
 ## Planned capabilities
 

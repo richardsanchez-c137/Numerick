@@ -490,6 +490,61 @@ Individual command tests and automated tests should be recorded separately as th
 - Add automated tests.
 
 
+### Version 0.2.0 — Initial local AI integration
+
+**Status: Implemented; initial manual test passed.**
+
+**Changes:**
+
+- Added `AIClient` as a separate C++ module.
+- Added an HTTP connection to the local Ollama API using Windows WinHTTP.
+- Added JSON request and response handling using nlohmann/json.
+- Integrated the Qwen 3.5 4B model through the `ask <question>` command.
+- Disabled model thinking in API requests where supported.
+- Added a response token limit and generation options.
+- Added error handling for HTTP requests and unexpected response formats.
+- Avoided recording the complete AI prompt in the activity log.
+
+**Files added:**
+
+- `include/numerick/ai_client.hpp`
+- `src/core/ai_client.cpp`
+
+**Files modified:**
+
+- `src/main.cpp`
+- `CMakeLists.txt`
+
+**Verified behaviour:**
+
+- The updated C++ application compiled and launched.
+- NUMERICK submitted a question to the locally running Ollama service.
+- Qwen generated an answer and NUMERICK displayed it.
+- The `status`, `help`, and `exit` commands continued to work.
+
+**Model evaluation:**
+
+The Qwen 3.5 4B model completed an earlier direct Ollama test in 1.87 seconds, generating 85 tokens. This was a single measured request, not a guarantee of consistent response latency.
+
+A larger Gemma 4 12B quantized model took approximately 47.47 seconds for a similar direct API request in the tested configuration, including model loading and answer generation. Its generation time was approximately 34.78 seconds.
+
+Qwen 3.5 4B was selected as the initial local model candidate because it fit within the GPU allocation reported by Ollama and responded much faster in the measured test.
+
+**Current limitations:**
+
+- AI requests must be explicitly prefixed with `ask`.
+- Conversation history is not yet passed between AI requests.
+- Natural voice interaction is not implemented.
+- Camera and image analysis are not integrated.
+- The AI cannot yet invoke application tools or control the computer.
+- Automated tests for the AI client have not yet been implemented.
+
+**Next objective:**
+
+Establish automated tests and a clearer separation between conversation handling, AI requests, and future tool execution before expanding the assistant's capabilities.
+
+
+
 ---
 
 ## 12. Rules for Maintaining This Document

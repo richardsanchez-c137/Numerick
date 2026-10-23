@@ -1,12 +1,16 @@
 
+#include "numerick/ai_client.hpp"
+
+#include <algorithm>
 #include <chrono>
+#include <cctype>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <string>
-#include <algorithm>
-#include <cctype>
 
 namespace fs = std::filesystem;
 
@@ -15,7 +19,6 @@ public:
     Numerick() {
         fs::create_directories("data");
         logFile.open("data/activity.log", std::ios::app);
-
         log("NUMERICK started");
     }
 
@@ -39,16 +42,22 @@ public:
                 break;
             }
 
-            input = normalize(input);
+            const std::string command = normalize(input);
 
-            if (input.empty()) {
+            if (command.empty()) {
                 continue;
             }
 
-            log("Input received: " + input);
+            // Do not write AI prompt contents to the activity log.
+            if (command.rfind("ask ", 0) == 0) {
+                log("AI request submitted");
+            } else {
+                log("Input received: " + command);
+            }
 
-            if (input == "exit" || input == "quit") {
-                std::cout << "NUMERICK > Shutting down. Goodbye.\n";
+            if (command == "exit" || command == "quit") {
+                std::cout
+                    << "NUMERICK > Shutting down. Goodbye.\n";
                 break;
             }
 
@@ -58,17 +67,9 @@ public:
 
 private:
     std::ofstream logFile;
+    numerick::AIClient aiClient;
 
-    static std::string normalize(std::string text) {
-        std::transform(
-            text.begin(),
-            text.end(),
-            text.begin(),
-            [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            }
-        );
-
+    static std::string trim(const std::string& text) {
         const auto first = text.find_first_not_of(" \t\r\n");
 
         if (first == std::string::npos) {
@@ -78,6 +79,21 @@ private:
         const auto last = text.find_last_not_of(" \t\r\n");
 
         return text.substr(first, last - first + 1);
+    }
+
+    static std::string normalize(std::string text) {
+        text = trim(text);
+
+        std::transform(
+            text.begin(),
+            text.end(),
+            text.begin(),
+            [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            }
+        );
+
+        return text;
     }
 
     static std::string currentTime() {
@@ -109,7 +125,6 @@ private:
         if (logFile.is_open()) {
             logFile << "[" << currentTime() << "] "
                     << message << '\n';
-
             logFile.flush();
         }
     }
@@ -121,29 +136,32 @@ private:
             << "          N U M E R I C K\n"
             << "       Personal Assistant Core\n"
             << "====================================\n"
-            << "Core version: 0.1.0\n"
-            << "AI model: Not connected yet\n"
+            << "Core version: 0.2.0\n"
+            << "AI model: Qwen 3.5 4B via Ollama\n"
             << "Type 'help' to see available commands.\n";
     }
 
     void handleCommand(const std::string& input) {
-        if (input == "help" || input == "commands") {
+        const std::string command = normalize(input);
+
+        if (command == "help" || command == "commands") {
             showHelp();
         }
-        else if (input == "hello" || input == "hi"
-                 || input == "hey") {
+        else if (command == "hello" ||
+                 command == "hi" ||
+                 command == "hey") {
             std::cout
                 << "NUMERICK > Hello. I'm online and ready.\n";
         }
-        else if (input == "status") {
+        else if (command == "status") {
             showStatus();
         }
-        else if (input == "time") {
+        else if (command == "time") {
             std::cout
                 << "NUMERICK > Local time: "
                 << currentTime() << '\n';
         }
-        else if (input == "clear") {
+        else if (command == "clear") {
 #ifdef _WIN32
             std::system("cls");
 #else
@@ -151,39 +169,73 @@ private:
 #endif
             printWelcome();
         }
+        else if (command.rfind("ask ", 0) == 0) {
+            const std::string cleaned = trim(input);
+            const std::string prompt = trim(cleaned.substr(4));
+
+            if (prompt.empty()) {
+                std::cout
+                    << "NUMERICK > Usage: ask <your question>\n";
+                return;
+            }
+
+            std::cout << "NUMERICK > Thinking...\n";
+
+            try {
+                const std::string answer = aiClient.ask(prompt);
+
+                std::cout
+                    << "\nNUMERICK > "
+                    << answer << '\n';
+
+                log("AI response received");
+            }
+            catch (const std::exception& error) {
+                std::cout
+                    << "\nNUMERICK > I couldn't get a response "
+                    << "from the local AI model.\n"
+                    << "Details: " << error.what() << '\n';
+
+                log(
+                    "AI request failed: " +
+                    std::string(error.what())
+                );
+            }
+        }
         else {
             std::cout
                 << "NUMERICK > I don't understand that command "
-                << "yet. My AI reasoning module isn't connected.\n";
+                << "yet. Try 'help' or 'ask <question>'.\n";
 
-            log("Unsupported command: " + input);
+            log("Unsupported command: " + command);
         }
     }
 
     void showHelp() const {
         std::cout
             << "\nAvailable commands:\n"
-            << "  help      - Show available commands\n"
-            << "  hello     - Test the assistant\n"
-            << "  status    - Show system status\n"
-            << "  time      - Display local time\n"
-            << "  clear     - Clear the console\n"
-            << "  exit      - Shut down NUMERICK\n"
+            << "  help             - Show available commands\n"
+            << "  hello            - Test the assistant\n"
+            << "  status           - Show current status\n"
+            << "  time             - Display local time\n"
+            << "  ask <question>   - Ask the local AI model\n"
+            << "  clear            - Clear the console\n"
+            << "  exit             - Shut down NUMERICK\n"
             << "\n";
     }
 
     void showStatus() const {
         std::cout
             << "\nNUMERICK STATUS\n"
-            << "-------------------------------\n"
+            << "--------------------------------\n"
             << "Core:          Running\n"
-            << "Language:      C++17\n"
-            << "AI model:      Not connected\n"
+            << "AI model:      Qwen 3.5 4B\n"
+            << "AI runtime:    Local Ollama API\n"
             << "Voice input:   Not implemented\n"
             << "Vision:        Not implemented\n"
             << "Memory:        Basic activity log\n"
             << "System access: No arbitrary commands\n"
-            << "-------------------------------\n";
+            << "--------------------------------\n";
     }
 };
 
@@ -193,8 +245,9 @@ int main() {
         assistant.run();
     }
     catch (const std::exception& error) {
-        std::cerr << "NUMERICK error: "
-                  << error.what() << '\n';
+        std::cerr
+            << "NUMERICK error: "
+            << error.what() << '\n';
 
         return 1;
     }
