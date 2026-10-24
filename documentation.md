@@ -653,3 +653,55 @@ Connect AI-generated tool requests to the registry through a controlled executio
 ---
 
 **End of current documentation — NUMERICK v0.1.0**
+
+
+### Tool Registry — Initial implementation
+
+**Status: Implemented and tested in isolation.**
+
+#### Files added
+
+- `include/numerick/tool_registry.hpp`
+- `src/tools/tool_registry.cpp`
+- `tests/tool_registry_tests.cpp`
+
+#### Architecture
+
+Implemented a C++ tool registry that stores tool definitions and their associated handlers.
+
+Each tool definition contains a name, description, and JSON parameter schema. The registry supports registering tools, looking them up, listing their definitions, and executing registered handlers.
+
+The registry is currently separate from the main assistant execution flow. AI-generated tool requests cannot yet invoke it.
+
+#### Tests implemented
+
+The automated test suite covers:
+
+- Registration and lookup of tools.
+- Retrieval of registered tool definitions.
+- Successful execution of a registered handler.
+- Rejection of unknown tools.
+- Rejection of non-object JSON arguments.
+- Handler-level input validation failures.
+- Rejection of duplicate tool registrations.
+- Conversion of handler exceptions into failure results.
+
+#### Verification results
+
+- Command parser tests: Passed.
+- Tool registry tests: Passed.
+- CTest: 2 of 2 tests passed.
+- CMake build: Completed successfully.
+- Main application: Manual verification passed after the CMake build.
+- Local Qwen AI integration: Responded successfully during manual testing.
+
+#### Current limitations
+
+- The registry is not connected to AI-generated tool calls.
+- No real operating-system tools are registered.
+- Parameter schemas are stored but are not fully validated against JSON Schema.
+- A dedicated permission and approval system has not yet been implemented.
+
+#### Next objective
+
+Connect the AI layer to the registry through a controlled execution process. Begin with a harmless, read-only tool, validate its inputs, execute it, and return the result to the model.

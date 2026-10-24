@@ -141,3 +141,62 @@ Current test suites:
 The initial tool registry is implemented and tested independently.
 
 It is not yet connected to AI-generated tool calls, and it does not currently perform real computer operations.
+
+
+## Automated Testing
+
+NUMERICK uses CMake and CTest to build and run its automated tests.
+
+### Configure the project
+
+```powershell
+cmake -S . -B build -G "MinGW Makefiles"
+```
+
+### Build all targets
+
+```powershell
+cmake --build build
+```
+
+### Run the test suite
+
+```powershell
+ctest --test-dir build --output-on-failure
+```
+
+### Current test suites
+
+- **command_parser_tests** — Tests command recognition, aliases, capitalization, whitespace, AI prompt preservation, empty input, and unknown commands.
+- **tool_registry_tests** — Tests tool registration, lookup, definition listing, handler execution, invalid arguments, duplicate registrations, and exception handling.
+
+Both test suites have passed in the development environment.
+
+## Tool Registry
+
+NUMERICK includes an initial C++ tool registry that stores tool definitions and their associated handlers.
+
+Each registered tool has a name, description, JSON parameter schema, and C++ handler.
+
+The registry currently supports:
+
+- Registering tools and retrieving their definitions.
+- Checking whether a tool is registered.
+- Executing a registered handler.
+- Rejecting unknown tool names and non-object arguments.
+- Returning handler errors as failed results.
+
+**Current limitation:** The registry is not yet connected to AI-generated tool calls and does not currently perform real computer operations. Full JSON Schema validation and a dedicated permission system remain future work.
+
+## Current Development Status
+
+- C++ command-line assistant: Implemented
+- Local Qwen AI integration through Ollama: Implemented
+- Command parser: Implemented and tested
+- Initial tool registry: Implemented and tested independently
+- AI-driven tool execution: Planned
+- Persistent conversational memory: Planned
+- Voice interaction: Planned
+- Camera and visual understanding: Planned
+- Controlled Windows automation: Planned
+- Graphical frontend: Planned
