@@ -9,19 +9,43 @@ project with a C++ core.
 
 
 
-## Current milestone: 0.3.0
 
-- Interactive C++ command-line interface
-- Basic command recognition
-- Local activity logging
-- System status reporting
-- Local AI integration through Ollama
-- Qwen 3.5 4B model support
-- HTTP communication through Windows WinHTTP
-- JSON request and response handling
-- Error handling for AI requests
-- separate command parser
-- utomated parser tests
+## Current Development Status — 0.4.0
+
+Implemented:
+- C++ command-line assistant
+- Local Qwen 3.5 4B integration through Ollama
+- Command parser with automated tests
+- C++ tool registry with automated tests
+- Built-in `get_local_time` tool
+- AI-driven tool orchestration through the `agent` command
+- Tool-round and tool-call limits
+- CMake build and CTest integration
+
+Example commands:
+
+```text
+hello
+status
+ask Explain an API in one sentence.
+agent What time is it right now?
+exit
+```
+
+The `ask` command sends a question to the model without registered tools.
+
+The `agent` command provides registered tool definitions and can execute tool requests through the registry. The current built-in tool set is limited to local time.
+
+Not yet implemented:
+- Automated tests for the complete tool-agent loop
+- Full JSON Schema validation
+- General user approval workflows
+- Natural voice conversations
+- Camera and image understanding
+- Persistent conversational memory
+- General Windows automation
+- Dedicated graphical frontend
+
 
 ## Current AI setup
 

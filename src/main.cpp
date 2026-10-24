@@ -1,5 +1,9 @@
+
 #include "numerick/ai_client.hpp"
+#include "numerick/builtin_tools.hpp"
 #include "numerick/command_parser.hpp"
+#include "numerick/tool_agent.hpp"
+#include "numerick/tool_registry.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -14,17 +18,23 @@ namespace fs = std::filesystem;
 
 class Numerick {
 public:
-    Numerick() {
+    Numerick()
+        : aiClient_(),
+          toolAgent_(aiClient_, registry_) {
         fs::create_directories("data");
-        logFile.open("data/activity.log", std::ios::app);
+        logFile_.open("data/activity.log", std::ios::app);
+
+        // Register only explicitly approved built-in tools.
+        numerick::registerBuiltinTools(registry_);
+
         log("NUMERICK started");
     }
 
     ~Numerick() {
         log("NUMERICK stopped");
 
-        if (logFile.is_open()) {
-            logFile.close();
+        if (logFile_.is_open()) {
+            logFile_.close();
         }
     }
 
@@ -48,9 +58,14 @@ public:
                 continue;
             }
 
-            // Avoid storing the contents of AI prompts in the log.
-            if (command.type == numerick::CommandType::Ask) {
-                log("AI request submitted");
+            // Do not record the user's entire AI prompt in the log.
+            if (command.type == numerick::CommandType::Ask ||
+                command.type == numerick::CommandType::Agent) {
+                log(
+                    command.type == numerick::CommandType::Agent
+                        ? "Agent request submitted"
+                        : "AI request submitted"
+                );
             } else {
                 log("Input received: " + input);
             }
@@ -62,8 +77,10 @@ public:
     }
 
 private:
-    std::ofstream logFile;
-    numerick::AIClient aiClient;
+    numerick::ToolRegistry registry_;
+    numerick::AIClient aiClient_;
+    numerick::ToolAgent toolAgent_;
+    std::ofstream logFile_;
 
     static std::string currentTime() {
         const auto now = std::chrono::system_clock::now();
@@ -91,10 +108,10 @@ private:
     }
 
     void log(const std::string& message) {
-        if (logFile.is_open()) {
-            logFile << "[" << currentTime() << "] "
-                    << message << '\n';
-            logFile.flush();
+        if (logFile_.is_open()) {
+            logFile_ << "[" << currentTime() << "] "
+                     << message << '\n';
+            logFile_.flush();
         }
     }
 
@@ -105,8 +122,10 @@ private:
             << "          N U M E R I C K\n"
             << "       Personal Assistant Core\n"
             << "====================================\n"
-            << "Core version: 0.3.0\n"
+            << "Core version: 0.4.0\n"
             << "AI model: Qwen 3.5 4B via Ollama\n"
+            << "Registered tools: "
+            << registry_.definitions().size() << '\n'
             << "Type 'help' to see available commands.\n";
     }
 
@@ -128,6 +147,7 @@ private:
             break;
 
         case CommandType::Time:
+            // Preserve the original direct time command.
             std::cout
                 << "NUMERICK > Local time: "
                 << currentTime() << '\n';
@@ -153,7 +173,7 @@ private:
 
             try {
                 const std::string answer =
-                    aiClient.ask(command.argument);
+                    aiClient_.ask(command.argument);
 
                 std::cout << "\nNUMERICK > "
                           << answer << '\n';
@@ -173,6 +193,36 @@ private:
             }
             break;
 
+        case CommandType::Agent:
+            if (command.argument.empty()) {
+                std::cout
+                    << "NUMERICK > Usage: agent <your request>\n";
+                break;
+            }
+
+            std::cout << "NUMERICK > Working on it...\n";
+
+            try {
+                const std::string answer =
+                    toolAgent_.run(command.argument);
+
+                std::cout << "\nNUMERICK > "
+                          << answer << '\n';
+
+                log("Agent request completed");
+            }
+            catch (const std::exception& error) {
+                std::cout
+                    << "\nNUMERICK > The agent request failed.\n"
+                    << "Details: " << error.what() << '\n';
+
+                log(
+                    "Agent request failed: " +
+                    std::string(error.what())
+                );
+            }
+            break;
+
         case CommandType::Exit:
             std::cout
                 << "NUMERICK > Shutting down. Goodbye.\n";
@@ -180,8 +230,9 @@ private:
 
         case CommandType::Unknown:
             std::cout
-                << "NUMERICK > I don't recognize that command "
-                << "yet. Try 'help' or 'ask <question>'.\n";
+                << "NUMERICK > I don't recognize that command. "
+                << "Try 'help', 'ask <question>', or "
+                << "'agent <request>'.\n";
 
             log("Unsupported command: " + command.argument);
             break;
@@ -193,13 +244,14 @@ private:
     void showHelp() const {
         std::cout
             << "\nAvailable commands:\n"
-            << "  help             - Show available commands\n"
-            << "  hello            - Test the assistant\n"
-            << "  status           - Show current status\n"
-            << "  time             - Display local time\n"
-            << "  ask <question>   - Ask the local AI model\n"
-            << "  clear            - Clear the console\n"
-            << "  exit             - Shut down NUMERICK\n"
+            << "  help              - Show available commands\n"
+            << "  hello             - Test the assistant\n"
+            << "  status            - Show current status\n"
+            << "  time              - Display local time\n"
+            << "  ask <question>    - Ask the AI without tools\n"
+            << "  agent <request>   - Let AI request registered tools\n"
+            << "  clear             - Clear the console\n"
+            << "  exit              - Shut down NUMERICK\n"
             << "\n";
     }
 
@@ -210,6 +262,8 @@ private:
             << "Core:          Running\n"
             << "AI model:      Qwen 3.5 4B\n"
             << "AI runtime:    Local Ollama API\n"
+            << "Registered tools: "
+            << registry_.definitions().size() << '\n'
             << "Voice input:   Not implemented\n"
             << "Vision:        Not implemented\n"
             << "Memory:        Basic activity log\n"
@@ -224,8 +278,9 @@ int main() {
         assistant.run();
     }
     catch (const std::exception& error) {
-        std::cerr << "NUMERICK error: "
-                  << error.what() << '\n';
+        std::cerr
+            << "NUMERICK error: "
+            << error.what() << '\n';
 
         return 1;
     }

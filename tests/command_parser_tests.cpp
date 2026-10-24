@@ -56,6 +56,28 @@ int main() {
     assert(parseCommand("   ").type == CommandType::Unknown);
     assert(parseCommand("launch browser").type == CommandType::Unknown);
 
+    // Agent command recognition
+    const auto agentRequest = parseCommand(
+        "agent What time is it right now?"
+    );
+
+    assert(agentRequest.type == CommandType::Agent);
+    assert(agentRequest.argument == "What time is it right now?");
+
+    // Case-insensitive command recognition
+    const auto uppercaseAgent = parseCommand(
+        "AGENT Explain this request"
+    );
+
+    assert(uppercaseAgent.type == CommandType::Agent);
+    assert(uppercaseAgent.argument == "Explain this request");
+
+    // Empty agent request
+    const auto emptyAgent = parseCommand("agent");
+
+    assert(emptyAgent.type == CommandType::Agent);
+    assert(emptyAgent.argument.empty());
+
     std::cout << "All command parser tests passed.\n";
 
     return 0;

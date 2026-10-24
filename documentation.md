@@ -705,3 +705,47 @@ The automated test suite covers:
 #### Next objective
 
 Connect the AI layer to the registry through a controlled execution process. Begin with a harmless, read-only tool, validate its inputs, execute it, and return the result to the model.
+
+
+### Version 0.4.0 — Initial AI-driven tool execution
+
+**Status: Implemented; initial end-to-end manual test passed.**
+
+#### Changes
+
+- Added a general-purpose `AIClient::chat()` method.
+- Added the `ToolAgent` orchestration module.
+- Converted registered tool definitions into Ollama's function-tool format.
+- Processed structured tool-call requests from the AI model.
+- Executed requested tools through the existing registry.
+- Returned tool results to the model for a final response.
+- Added limits of three tool rounds and four tool calls per request.
+- Registered the built-in `get_local_time` tool at application startup.
+- Added the `agent <request>` console command.
+- Preserved the existing `ask <question>` command for ordinary AI responses.
+- Updated the application version to 0.4.0.
+
+#### Verification
+
+- CMake build completed successfully.
+- Command parser tests passed.
+- Tool registry tests passed.
+- Built-in tool tests passed.
+- The application displayed one registered tool at startup.
+- The `status` command continued to work.
+- An `agent` request asking for the current time returned a natural-language answer.
+- An ordinary `ask` request continued to return an AI-generated response.
+- The application exited normally.
+
+#### Current limitations
+
+- The end-to-end tool workflow has only received initial manual testing.
+- Tool-call traces are not yet exposed in a dedicated diagnostic view.
+- Full JSON Schema validation is not implemented.
+- There is no general-purpose user approval system.
+- Only a low-risk local-time tool is registered.
+- Voice, camera input, persistent conversational memory, and Windows automation remain unimplemented.
+
+#### Next objective
+
+Add automated tests for the agent orchestration, including successful tool execution, unknown tool requests, tool failures, malformed calls, and execution limits. Improve diagnostics before registering more powerful tools.

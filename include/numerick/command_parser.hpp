@@ -11,6 +11,7 @@ enum class CommandType {
     Status,
     Time,
     Ask,
+    Agent,
     Clear,
     Exit,
     Unknown

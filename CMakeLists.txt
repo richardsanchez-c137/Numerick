@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Numerick
-    VERSION 0.3.0
+    VERSION 0.4.0
     DESCRIPTION "A personal AI assistant"
     LANGUAGES CXX
 )
@@ -28,14 +28,16 @@ add_executable(numerick
     src/main.cpp
     src/core/ai_client.cpp
     src/core/command_parser.cpp
+    src/core/tool_agent.cpp
+    src/tools/tool_registry.cpp
+    src/tools/builtin_tools.cpp
 )
 
 target_include_directories(numerick PRIVATE include)
 target_link_libraries(numerick PRIVATE winhttp)
-
 numerick_enable_warnings(numerick)
 
-# Automated tests
+# Command parser tests
 enable_testing()
 
 add_executable(command_parser_tests
@@ -51,6 +53,7 @@ add_test(
     COMMAND command_parser_tests
 )
 
+# Tool registry tests
 add_executable(tool_registry_tests
     tests/tool_registry_tests.cpp
     src/tools/tool_registry.cpp
@@ -62,4 +65,19 @@ numerick_enable_warnings(tool_registry_tests)
 add_test(
     NAME tool_registry_tests
     COMMAND tool_registry_tests
+)
+
+# Built-in tool tests
+add_executable(builtin_tools_tests
+    tests/builtin_tools_tests.cpp
+    src/tools/builtin_tools.cpp
+    src/tools/tool_registry.cpp
+)
+
+target_include_directories(builtin_tools_tests PRIVATE include)
+numerick_enable_warnings(builtin_tools_tests)
+
+add_test(
+    NAME builtin_tools_tests
+    COMMAND builtin_tools_tests
 )

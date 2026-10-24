@@ -80,6 +80,17 @@ ParsedCommand parseCommand(const std::string& input) {
         };
     }
 
+    if (normalized == "agent") {
+        return {CommandType::Agent, ""};
+    }
+
+    if (normalized.rfind("agent ", 0) == 0) {
+        return {
+            CommandType::Agent,
+            trim(cleaned.substr(6))
+        };
+    }   
+
     return {CommandType::Unknown, cleaned};
 }
 

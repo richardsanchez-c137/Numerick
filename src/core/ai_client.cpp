@@ -14,7 +14,7 @@
 
 namespace {
 
-using json = nlohmann::json;
+using Json = nlohmann::json;
 
 struct WinHttpHandle {
     HINTERNET value = nullptr;
@@ -46,48 +46,43 @@ namespace numerick {
 AIClient::AIClient(std::string model)
     : model_(std::move(model)) {}
 
-std::string AIClient::ask(const std::string& prompt) const {
-    if (prompt.empty()) {
-        throw std::invalid_argument("The prompt cannot be empty.");
+Json AIClient::chat(
+    const Json& messages,
+    const Json& tools
+) const {
+    if (!messages.is_array() || messages.empty()) {
+        throw std::invalid_argument(
+            "Chat messages must be a non-empty JSON array."
+        );
     }
 
-    
-        const json requestBody = {
-            {"model", model_},
-            {"messages", json::array({
-                {
-                    {"role", "system"},
-                    {"content",
-                        "You are NUMERICK, a personal AI assistant. "
-                        "Answer the user's actual question directly. "
-                        "For ordinary questions, prefer a concise answer "
-                        "of 2-5 sentences. For simple explanations, aim "
-                        "for fewer than 120 words unless more detail is "
-                        "requested. Use clear language and formatting. "
-                        "Never claim to have performed an action unless "
-                        "it was actually performed and verified."
-                    }
-                },
-                {
-                    {"role", "user"},
-                    {"content", prompt}
-                }
-            })},
-            {"stream", false},
-            {"think", false},
-            {"keep_alive", "5m"},
-            {"options", {
-                {"num_predict", 512},
-                {"temperature", 0.4}
-            }}
-        };
+    if (!tools.is_array()) {
+        throw std::invalid_argument(
+            "Tools must be a JSON array."
+        );
+    }
 
+    Json requestBody = {
+        {"model", model_},
+        {"messages", messages},
+        {"stream", false},
+        {"think", false},
+        {"keep_alive", "5m"},
+        {"options", {
+            {"num_predict", 512},
+            {"temperature", 0.4}
+        }}
+    };
+
+    if (!tools.empty()) {
+        requestBody["tools"] = tools;
+    }
 
     const std::string payload = requestBody.dump();
 
     WinHttpHandle session{
         WinHttpOpen(
-            L"NUMERICK/0.2.0",
+            L"NUMERICK/0.4.0",
             WINHTTP_ACCESS_TYPE_NO_PROXY,
             WINHTTP_NO_PROXY_NAME,
             WINHTTP_NO_PROXY_BYPASS,
@@ -99,13 +94,10 @@ std::string AIClient::ask(const std::string& prompt) const {
         throw winHttpError("Opening HTTP session");
     }
 
-    WinHttpSetTimeouts(
-        session.value,
-        5000,    // DNS resolution
-        5000,    // Connection
-        15000,   // Send
-        120000   // Receive
-    );
+    if (!WinHttpSetTimeouts(
+            session.value, 5000, 5000, 15000, 120000)) {
+        throw winHttpError("Setting HTTP timeouts");
+    }
 
     WinHttpHandle connection{
         WinHttpConnect(
@@ -206,20 +198,54 @@ std::string AIClient::ask(const std::string& prompt) const {
         );
     }
 
-    const json response = json::parse(responseBody);
+    const Json response = Json::parse(responseBody);
 
-    if (!response.contains("message") ||
-        !response["message"].is_object() ||
-        !response["message"].contains("content") ||
-        !response["message"]["content"].is_string()) {
+    if (!response.is_object() ||
+        !response.contains("message") ||
+        !response["message"].is_object()) {
         throw std::runtime_error(
             "Ollama returned an unexpected response format."
         );
     }
 
-    
+    return response;
+}
+
+std::string AIClient::ask(const std::string& prompt) const {
+    if (prompt.empty()) {
+        throw std::invalid_argument(
+            "The prompt cannot be empty."
+        );
+    }
+
+    const Json messages = Json::array({
+        {
+            {"role", "system"},
+            {"content",
+                "You are NUMERICK, a personal AI assistant. "
+                "Answer clearly and directly. Be concise for "
+                "ordinary questions. Never claim to have "
+                "performed an action unless it was verified."
+            }
+        },
+        {
+            {"role", "user"},
+            {"content", prompt}
+        }
+    });
+
+    const Json response = chat(messages);
+    const Json& message = response["message"];
+
+    if (!message.contains("content") ||
+        !message["content"].is_string()) {
+        throw std::runtime_error(
+            "Ollama response did not contain text content."
+        );
+    }
+
     const std::string content =
-        response["message"]["content"].get<std::string>();
+        message["content"].get<std::string>();
 
     if (response.value("done_reason", std::string{}) == "length") {
         return content +
@@ -228,7 +254,6 @@ std::string AIClient::ask(const std::string& prompt) const {
     }
 
     return content;
-
 }
 
 } // namespace numerick
