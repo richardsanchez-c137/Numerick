@@ -793,3 +793,43 @@ Add automated tests for the agent orchestration, including successful tool execu
 #### Next objective
 
 Improve request validation and diagnostic reporting, then verify the complete agent workflow against the local Ollama model.
+
+
+### Tool Registry — Schema Validation
+
+**Status: Implemented and tested.**
+
+#### Changes
+
+- Added validation of tool parameter schemas during registration.
+- Added checks for required properties and supported property types.
+- Added validation of argument types before handler execution.
+- Added rejection of missing required arguments.
+- Added rejection of unexpected arguments when `additionalProperties` is false.
+- Added checks for malformed schema definitions.
+- Preserved the existing registry and agent interfaces.
+
+#### Supported validation features
+
+- Top-level object schemas.
+- Property definitions and basic JSON types: string, integer, number, boolean, object, array, and null.
+- Required-property declarations.
+- The `additionalProperties` boolean.
+- Required arguments and property types at execution time.
+
+#### Verification
+
+- CMake build: Passed.
+- Command parser tests: Passed.
+- Tool registry tests: Passed.
+- Built-in tool tests: Passed.
+- Tool agent tests: Passed.
+- CTest: 4 of 4 test suites passed.
+
+The registry tests now also cover missing required arguments, type mismatches, unexpected arguments, and invalid schema definitions.
+
+#### Limitations
+
+This is a deliberately limited schema validator, not a complete JSON Schema implementation. Nested schema validation, numeric ranges, string patterns, enums, array item constraints, and other advanced JSON Schema features are not implemented.
+
+The validator reduces malformed tool requests but does not replace permission checks or approval requirements for consequential operations.

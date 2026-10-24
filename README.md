@@ -254,3 +254,20 @@ The current test suite contains four targets:
 
 Passing automated tests establish the behaviour of the tested components. They do not, by themselves, prove the reliability of every live AI interaction.
 
+
+### Tool Argument Validation
+
+The registry validates tool definitions when they are registered and checks arguments before invoking a handler.
+
+The current validator supports:
+
+- Object parameter schemas.
+- Required properties.
+- Basic JSON property types.
+- Rejection of unexpected arguments when prohibited by the schema.
+- Rejection of malformed schema definitions.
+
+This is a limited subset of JSON Schema. It does not currently implement nested validation or every standard schema constraint.
+
+Automated tests cover invalid definitions, missing arguments, mismatched types, unexpected arguments, and handler execution failures.
+

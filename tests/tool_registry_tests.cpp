@@ -22,7 +22,8 @@ int main() {
             {"properties", {
                 {"text", {{"type", "string"}}}
             }},
-            {"required", {"text"}}
+            {"required", {"text"}},
+            {"additionalProperties", false}
         }
     };
 
@@ -86,6 +87,44 @@ int main() {
 
     assert(!missingText.success);
 
+    
+    // Required arguments must be present.
+    const auto missingRequired = registry.execute(
+        "echo_text",
+        Json::object()
+    );
+
+    assert(!missingRequired.success);
+    assert(missingRequired.output.find(
+        "Missing required argument: text"
+    ) != std::string::npos);
+
+    // Argument types must match the declared schema.
+    const auto wrongType = registry.execute(
+        "echo_text",
+        {{"text", 123}}
+    );
+
+    assert(!wrongType.success);
+    assert(wrongType.output.find(
+        "must have type 'string'"
+    ) != std::string::npos);
+
+    // Additional arguments must be rejected when prohibited.
+    const auto unexpectedArgument = registry.execute(
+        "echo_text",
+        {
+            {"text", "hello"},
+            {"admin", true}
+        }
+    );
+
+    assert(!unexpectedArgument.success);
+    assert(unexpectedArgument.output.find(
+        "Unexpected argument: admin"
+    ) != std::string::npos);
+
+
     // Duplicate tool registrations must be rejected.
     bool duplicateRejected = false;
 
@@ -125,6 +164,119 @@ int main() {
            != std::string::npos);
 
     std::cout << "All tool registry tests passed.\n";
+
+    
+    // Invalid schemas must be rejected during registration.
+    const auto rejectsInvalidSchema = [](
+        const std::string& name,
+        const Json& schema
+    ) {
+        ToolRegistry isolatedRegistry;
+        bool rejected = false;
+
+        try {
+            isolatedRegistry.registerTool(
+                {
+                    name,
+                    "An invalid schema used for testing.",
+                    schema
+                },
+                [](const Json&) -> ToolResult {
+                    return {true, "This handler must not run."};
+                }
+            );
+        }
+        catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+
+        assert(rejected);
+        assert(!isolatedRegistry.contains(name));
+    };
+
+    // Missing top-level object type.
+    const Json missingTypeSchema = {
+        {"properties", Json::object()}
+    };
+
+    rejectsInvalidSchema(
+        "missing_type",
+        missingTypeSchema
+    );
+
+    // Properties must be declared as an object.
+    const Json invalidPropertiesSchema = {
+        {"type", "object"},
+        {"properties", Json::array()}
+    };
+
+    rejectsInvalidSchema(
+        "invalid_properties",
+        invalidPropertiesSchema
+    );
+
+    // Required must be an array.
+    const Json invalidRequiredSchema = {
+        {"type", "object"},
+        {"required", "text"}
+    };
+
+    rejectsInvalidSchema(
+        "invalid_required",
+        invalidRequiredSchema
+    );
+
+    // Required properties must exist in the properties definition.
+    const Json undeclaredRequiredSchema = {
+        {"type", "object"},
+        {"properties", Json::object()},
+        {"required", Json::array({"missing_field"})}
+    };
+
+    rejectsInvalidSchema(
+        "undeclared_required",
+        undeclaredRequiredSchema
+    );
+
+    // Unsupported property types must be rejected.
+    const Json unsupportedPropertyTypeSchema = {
+        {"type", "object"},
+        {"properties", {
+            {"path", {
+                {"type", "file"}
+            }}
+        }}
+    };
+
+    rejectsInvalidSchema(
+        "unsupported_property_type",
+        unsupportedPropertyTypeSchema
+    );
+
+    // A property schema must itself be an object.
+    const Json invalidPropertySchema = {
+        {"type", "object"},
+        {"properties", {
+            {"text", "string"}
+        }}
+    };
+
+    rejectsInvalidSchema(
+        "invalid_property_schema",
+        invalidPropertySchema
+    );
+
+    // additionalProperties must be a boolean.
+    const Json invalidAdditionalPropertiesSchema = {
+        {"type", "object"},
+        {"additionalProperties", "false"}
+    };
+
+    rejectsInvalidSchema(
+        "invalid_additional_properties",
+        invalidAdditionalPropertiesSchema
+    );
+
 
     return 0;
 }
