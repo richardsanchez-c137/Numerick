@@ -6,23 +6,22 @@
 
 namespace numerick {
 
-class AIClient;
+class ChatClient;
 class ToolRegistry;
 
 class ToolAgent {
 public:
     ToolAgent(
-        AIClient& aiClient,
+        const ChatClient& aiClient,
         const ToolRegistry& registry,
         std::size_t maxToolRounds = 3,
         std::size_t maxToolCalls = 4
     );
 
-    // Run one user request through the AI/tool execution loop.
     std::string run(const std::string& prompt) const;
 
 private:
-    AIClient& aiClient_;
+    const ChatClient& aiClient_;
     const ToolRegistry& registry_;
 
     std::size_t maxToolRounds_;

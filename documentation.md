@@ -749,3 +749,47 @@ Connect the AI layer to the registry through a controlled execution process. Beg
 #### Next objective
 
 Add automated tests for the agent orchestration, including successful tool execution, unknown tool requests, tool failures, malformed calls, and execution limits. Improve diagnostics before registering more powerful tools.
+
+
+### Milestone 4.1 — Automated tool-agent tests
+
+**Status: Implemented and tested.**
+
+#### Changes
+
+- Added the `ChatClient` interface to separate the agent from a specific AI provider.
+- Updated `AIClient` to implement the interface.
+- Updated `ToolAgent` to depend on the abstract chat interface.
+- Added a fake chat client for deterministic agent testing.
+- Added `tests/tool_agent_tests.cpp`.
+- Registered the new test target with CMake and CTest.
+
+#### Test coverage
+
+- Successful tool execution and delivery of the result back to the model.
+- Rejection of unknown tool requests.
+- Rejection of malformed tool arguments.
+- Enforcement of the tool-round limit.
+- Enforcement of the tool-call limit.
+- Rejection of empty prompts.
+
+#### Verification results
+
+- CMake build completed successfully.
+- Command parser tests: Passed.
+- Tool registry tests: Passed.
+- Built-in tool tests: Passed.
+- Tool agent tests: Passed.
+- CTest: 4 of 4 tests passed.
+- Direct execution of `tool_agent_tests.exe` reported that all tool-agent tests passed.
+
+#### Current limitations
+
+- The automated agent tests use a fake chat client rather than a live Ollama service.
+- Full JSON Schema validation is not implemented.
+- Tool permissions and approval policies need further development before adding consequential operations.
+- The live tool-calling workflow still requires separate integration testing.
+
+#### Next objective
+
+Improve request validation and diagnostic reporting, then verify the complete agent workflow against the local Ollama model.

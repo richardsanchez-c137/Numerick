@@ -224,3 +224,33 @@ The registry currently supports:
 - Camera and visual understanding: Planned
 - Controlled Windows automation: Planned
 - Graphical frontend: Planned
+
+
+### Tool Agent Tests
+
+The tool-agent test suite uses a fake chat client, allowing the orchestration logic to be tested without running Ollama.
+
+It covers:
+
+- Successful tool-call execution and result delivery.
+- Unknown tool requests.
+- Malformed tool arguments.
+- Tool-round and tool-call limits.
+- Empty prompts.
+
+Run the complete test suite:
+
+```powershell
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+The current test suite contains four targets:
+
+- `command_parser_tests`
+- `tool_registry_tests`
+- `builtin_tools_tests`
+- `tool_agent_tests`
+
+Passing automated tests establish the behaviour of the tested components. They do not, by themselves, prove the reliability of every live AI interaction.
+

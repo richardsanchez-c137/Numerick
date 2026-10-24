@@ -81,3 +81,21 @@ add_test(
     NAME builtin_tools_tests
     COMMAND builtin_tools_tests
 )
+
+
+# Tool agent tests use a fake chat client; Ollama is not required.
+add_executable(tool_agent_tests
+    tests/tool_agent_tests.cpp
+    src/core/tool_agent.cpp
+    src/tools/tool_registry.cpp
+)
+
+target_include_directories(tool_agent_tests PRIVATE include)
+
+numerick_enable_warnings(tool_agent_tests)
+
+add_test(
+    NAME tool_agent_tests
+    COMMAND tool_agent_tests
+)
+

@@ -1,7 +1,7 @@
 
 #include "numerick/tool_agent.hpp"
 
-#include "numerick/ai_client.hpp"
+#include "numerick/chat_client.hpp"
 #include "numerick/tool_registry.hpp"
 
 #include <stdexcept>
@@ -42,7 +42,7 @@ std::string getMessageContent(const Json& message) {
 } // namespace
 
 ToolAgent::ToolAgent(
-    AIClient& aiClient,
+    const ChatClient& aiClient,
     const ToolRegistry& registry,
     std::size_t maxToolRounds,
     std::size_t maxToolCalls
