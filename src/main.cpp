@@ -77,6 +77,23 @@ public:
     }
 
 private:
+
+    static const char* stopReasonName(
+        numerick::AgentStopReason reason
+    ) {
+        switch (reason) {
+        case numerick::AgentStopReason::Completed:
+            return "completed";
+
+        case numerick::AgentStopReason::ToolRoundLimitReached:
+            return "tool_round_limit";
+
+        case numerick::AgentStopReason::ToolCallLimitReached:
+            return "tool_call_limit";
+        }
+
+        return "unknown";
+    }
     numerick::ToolRegistry registry_;
     numerick::AIClient aiClient_;
     numerick::ToolAgent toolAgent_;
@@ -202,15 +219,49 @@ private:
 
             std::cout << "NUMERICK > Working on it...\n";
 
+            
             try {
-                const std::string answer =
-                    toolAgent_.run(command.argument);
+                const numerick::AgentRunReport report =
+                    toolAgent_.runWithDiagnostics(command.argument);
 
                 std::cout << "\nNUMERICK > "
-                          << answer << '\n';
+                          << report.answer << '\n';
 
-                log("Agent request completed");
+                log(
+                    "Agent diagnostics: model_requests=" +
+                    std::to_string(report.modelRequests) +
+                    ", tool_rounds=" +
+                    std::to_string(report.toolRounds) +
+                    ", tool_calls_requested=" +
+                    std::to_string(report.toolCallsRequested) +
+                    ", tool_calls_succeeded=" +
+                    std::to_string(report.toolCallsSucceeded) +
+                    ", tool_calls_failed=" +
+                    std::to_string(report.toolCallsFailed) +
+                    ", tool_calls_rejected=" +
+                    std::to_string(report.toolCallsRejected) +
+                    ", stop_reason=" +
+                    stopReasonName(report.stopReason)
+                );
+
+                for (const auto& event : report.toolCalls) {
+                    log(
+                        "Agent tool outcome: " +
+                        event.name + " / " + event.outcome
+                    );
+                }
             }
+            catch (const std::exception& error) {
+                std::cout
+                    << "\nNUMERICK > The agent request failed.\n"
+                    << "Details: " << error.what() << '\n';
+
+                log(
+                    "Agent request failed: " +
+                    std::string(error.what())
+                );
+            }
+
             catch (const std::exception& error) {
                 std::cout
                     << "\nNUMERICK > The agent request failed.\n"

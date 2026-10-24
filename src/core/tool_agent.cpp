@@ -53,28 +53,34 @@ ToolAgent::ToolAgent(
       maxToolCalls_(maxToolCalls) {}
 
 std::string ToolAgent::run(const std::string& prompt) const {
+    return runWithDiagnostics(prompt).answer;
+}
+
+AgentRunReport ToolAgent::runWithDiagnostics(
+    const std::string& prompt
+) const {
     if (prompt.find_first_not_of(" \t\r\n") == std::string::npos) {
         throw std::invalid_argument(
             "The agent prompt cannot be empty."
         );
     }
 
+    AgentRunReport report;
     const Json tools = makeToolDefinitions(registry_);
 
     Json messages = Json::array({
         {
             {"role", "system"},
             {"content",
-                
                 "You are NUMERICK, a personal AI assistant. "
                 "Answer clearly and concisely. Use registered tools "
-                "when they are the appropriate way to obtain real information. "
-                "When the user asks for the current local date or time, "
+                "when they are appropriate for obtaining real "
+                "information. When asked for the current local time, "
                 "call get_local_time and use its returned result. "
-                "Never guess the current time or claim a tool succeeded "
-                "unless its result confirms success. If a tool fails, "
-                "explain that failure honestly. Use only the tools provided."
-
+                "Never guess the current time or claim a tool "
+                "succeeded without its result. If a tool fails, "
+                "explain that failure honestly. Use only the tools "
+                "provided with this request."
             }
         },
         {
@@ -83,13 +89,14 @@ std::string ToolAgent::run(const std::string& prompt) const {
         }
     });
 
-    std::size_t toolRounds = 0;
-    std::size_t toolCalls = 0;
+    std::size_t processedCalls = 0;
 
     while (true) {
         const Json response = aiClient_.chat(messages, tools);
+        ++report.modelRequests;
 
-        if (!response.contains("message") ||
+        if (!response.is_object() ||
+            !response.contains("message") ||
             !response["message"].is_object()) {
             throw std::runtime_error(
                 "The AI response does not contain a valid message."
@@ -97,7 +104,6 @@ std::string ToolAgent::run(const std::string& prompt) const {
         }
 
         const Json& message = response["message"];
-
         Json requestedCalls = Json::array();
 
         if (message.contains("tool_calls")) {
@@ -110,39 +116,50 @@ std::string ToolAgent::run(const std::string& prompt) const {
             requestedCalls = message["tool_calls"];
         }
 
-        // No tool request: this is the final assistant response.
         if (requestedCalls.empty()) {
-            const std::string content = getMessageContent(message);
+            report.answer = getMessageContent(message);
 
-            if (content.empty()) {
-                return "NUMERICK received an empty final response.";
+            if (report.answer.empty()) {
+                report.answer =
+                    "NUMERICK received an empty final response.";
             }
 
-            return content;
+            return report;
         }
 
-        // Stop before executing any calls that exceed our limits.
-        if (toolRounds >= maxToolRounds_) {
-            return "NUMERICK stopped because the tool-round limit "
-                   "was reached. No additional tools were executed.";
+        report.toolCallsRequested += requestedCalls.size();
+
+        if (report.toolRounds >= maxToolRounds_) {
+            report.stopReason = AgentStopReason::ToolRoundLimitReached;
+            report.answer =
+                "NUMERICK stopped because the tool-round limit "
+                "was reached. No additional tools were executed.";
+            return report;
         }
 
-        if (toolCalls >= maxToolCalls_ ||
-            requestedCalls.size() > maxToolCalls_ - toolCalls) {
-            return "NUMERICK stopped because the tool-call limit "
-                   "was reached. The latest requested tools were "
-                   "not executed.";
+        if (processedCalls > maxToolCalls_ ||
+            requestedCalls.size() > maxToolCalls_ - processedCalls) {
+            report.stopReason = AgentStopReason::ToolCallLimitReached;
+            report.answer =
+                "NUMERICK stopped because the tool-call limit "
+                "was reached. The latest requested tools were "
+                "not executed.";
+            return report;
         }
 
-        // Preserve the assistant's original tool-call message.
+        // Preserve the assistant message that contains tool_calls.
         messages.push_back(message);
+        ++report.toolRounds;
 
         for (const Json& call : requestedCalls) {
             std::string toolName = "__invalid_tool_call__";
+            std::string outcome = "rejected";
             ToolResult result{
                 false,
-                "The AI returned a malformed tool request."
+                "Malformed tool request."
             };
+
+            bool wellFormed = false;
 
             if (call.is_object() &&
                 call.contains("function") &&
@@ -151,44 +168,59 @@ std::string ToolAgent::run(const std::string& prompt) const {
                 const Json& function = call["function"];
 
                 if (function.contains("name") &&
-                    function["name"].is_string()) {
+                    function["name"].is_string() &&
+                    function.contains("arguments") &&
+                    function["arguments"].is_object()) {
 
                     toolName = function["name"].get<std::string>();
-
-                    if (function.contains("arguments") &&
-                        function["arguments"].is_object()) {
-
-                        result = registry_.execute(
-                            toolName,
-                            function["arguments"]
-                        );
-                    }
-                    else {
-                        result = {
-                            false,
-                            "Tool arguments must be a JSON object."
-                        };
-                    }
+                    wellFormed = true;
                 }
             }
 
-            const std::string toolOutput =
-                result.success
-                    ? result.output
-                    : "Tool error: " + result.output;
+            if (!wellFormed) {
+                outcome = "malformed";
+                ++report.toolCallsRejected;
+                result.output =
+                    "The tool request was malformed. "
+                    "A string name and object arguments are required.";
+            }
+            else if (!registry_.contains(toolName)) {
+                outcome = "rejected";
+                ++report.toolCallsRejected;
+                result.output =
+                    "Tool is not registered: " + toolName;
+            }
+            else {
+                result = registry_.execute(
+                    toolName,
+                    call["function"]["arguments"]
+                );
 
-            // Send the result back to the model. A tool error is
-            // data for the model, not proof that the task succeeded.
+                // Count a registry submission as processed even when
+                // schema validation or the handler rejects it.
+                if (result.success) {
+                    outcome = "succeeded";
+                    ++report.toolCallsSucceeded;
+                }
+                else {
+                    outcome = "failed";
+                    ++report.toolCallsFailed;
+                }
+            }
+
             messages.push_back({
                 {"role", "tool"},
                 {"tool_name", toolName},
-                {"content", toolOutput}
+                {"content",
+                    result.success
+                        ? result.output
+                        : "Tool error: " + result.output
+                }
             });
 
-            ++toolCalls;
+            report.toolCalls.push_back({toolName, outcome});
+            ++processedCalls;
         }
-
-        ++toolRounds;
     }
 }
 

@@ -13,10 +13,10 @@
 using numerick::ChatClient;
 using numerick::Json;
 using numerick::ToolAgent;
-using numerick::ToolDefinition;
 using numerick::ToolRegistry;
 using numerick::ToolResult;
 
+// Simulates model responses so tests do not require Ollama.
 class FakeChatClient final : public ChatClient {
 public:
     explicit FakeChatClient(std::vector<Json> responses)
@@ -46,22 +46,27 @@ private:
     mutable std::size_t nextResponse_ = 0;
 };
 
-static Json toolRequest(
+static Json makeToolCall(
     const std::string& name,
-    const Json& arguments
+    const Json& arguments,
+    const std::string& id = "call_test"
 ) {
+    return {
+        {"id", id},
+        {"type", "function"},
+        {"function", {
+            {"name", name},
+            {"arguments", arguments}
+        }}
+    };
+}
+
+static Json toolRequest(const Json& calls) {
     return {
         {"message", {
             {"role", "assistant"},
             {"content", ""},
-            {"tool_calls", Json::array({
-                {
-                    {"function", {
-                        {"name", name},
-                        {"arguments", arguments}
-                    }}
-                }
-            })}
+            {"tool_calls", calls}
         }}
     };
 }
@@ -75,7 +80,10 @@ static Json finalAnswer(const std::string& content) {
     };
 }
 
-static void registerEchoTool(ToolRegistry& registry) {
+static void registerEchoTool(
+    ToolRegistry& registry,
+    int* executionCount = nullptr
+) {
     registry.registerTool(
         {
             "echo_text",
@@ -85,40 +93,54 @@ static void registerEchoTool(ToolRegistry& registry) {
                 {"properties", {
                     {"text", {{"type", "string"}}}
                 }},
-                {"required", {"text"}}
+                {"required", {"text"}},
+                {"additionalProperties", false}
             }
         },
-        [](const Json& args) -> ToolResult {
-            if (!args.contains("text") ||
-                !args["text"].is_string()) {
-                return {false, "Invalid text argument."};
+        [executionCount](const Json& arguments) -> ToolResult {
+            if (executionCount != nullptr) {
+                ++(*executionCount);
             }
 
             return {
                 true,
-                args["text"].get<std::string>()
+                arguments["text"].get<std::string>()
             };
         }
     );
 }
 
+// 1. Successful tool execution and result handoff.
 static void testSuccessfulToolCycle() {
     ToolRegistry registry;
     registerEchoTool(registry);
 
-    FakeChatClient ai({
-        toolRequest("echo_text", {{"text", "verified result"}}),
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({
+            makeToolCall(
+                "echo_text",
+                {{"text", "verified result"}}
+            )
+        })),
         finalAnswer("The tool returned verified result.")
     });
 
     ToolAgent agent(ai, registry);
 
-    const std::string answer = agent.run("Run the echo tool.");
+    const auto report =
+        agent.runWithDiagnostics("Run the echo tool.");
 
-    assert(answer == "The tool returned verified result.");
-    assert(ai.seenMessages.size() == 2);
-    assert(ai.seenTools[0].size() == 1);
-    assert(ai.seenTools[0][0]["function"]["name"] == "echo_text");
+    assert(report.answer == "The tool returned verified result.");
+    assert(report.modelRequests == 2);
+    assert(report.toolRounds == 1);
+    assert(report.toolCallsRequested == 1);
+    assert(report.toolCallsSucceeded == 1);
+    assert(report.toolCallsFailed == 0);
+    assert(report.toolCallsRejected == 0);
+
+    assert(report.toolCalls.size() == 1);
+    assert(report.toolCalls[0].name == "echo_text");
+    assert(report.toolCalls[0].outcome == "succeeded");
 
     const Json& followUp = ai.seenMessages[1];
     assert(followUp.back()["role"] == "tool");
@@ -126,56 +148,198 @@ static void testSuccessfulToolCycle() {
     assert(followUp.back()["content"] == "verified result");
 }
 
+// 2. Unknown tools must be rejected by the registry.
 static void testUnknownToolIsRejected() {
     ToolRegistry registry;
     registerEchoTool(registry);
 
-    FakeChatClient ai({
-        toolRequest("unknown_operation", Json::object()),
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({
+            makeToolCall("unknown_operation", Json::object())
+        })),
         finalAnswer("The requested tool was unavailable.")
     });
 
     ToolAgent agent(ai, registry);
 
-    const std::string answer =
-        agent.run("Request an unknown tool.");
+    const auto report =
+        agent.runWithDiagnostics("Request an unknown tool.");
 
-    assert(answer == "The requested tool was unavailable.");
-    assert(ai.seenMessages.size() == 2);
+    assert(report.answer == "The requested tool was unavailable.");
+    assert(report.modelRequests == 2);
+    assert(report.toolCallsRequested == 1);
+    assert(report.toolCallsRejected == 1);
+    assert(report.toolCallsSucceeded == 0);
+    assert(report.toolCalls.size() == 1);
+    assert(report.toolCalls[0].outcome == "rejected");
 
     const Json& resultMessage = ai.seenMessages[1].back();
 
     assert(resultMessage["role"] == "tool");
-    assert(resultMessage["content"].get<std::string>().find(
-        "Tool error: Tool is not registered"
-    ) != std::string::npos);
+    assert(
+        resultMessage["content"].get<std::string>().find(
+            "Tool error: Tool is not registered"
+        ) != std::string::npos
+    );
 }
 
+// 3. Arguments that are not a JSON object must be rejected.
 static void testMalformedArgumentsAreRejected() {
     ToolRegistry registry;
-    registerEchoTool(registry);
+    int executionCount = 0;
+    registerEchoTool(registry, &executionCount);
 
-    FakeChatClient ai({
-        toolRequest("echo_text", Json::array({"not", "an object"})),
-        finalAnswer("The tool arguments were invalid.")
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({
+            makeToolCall(
+                "echo_text",
+                Json::array({"not", "an", "object"})
+            )
+        })),
+        finalAnswer("The tool request was invalid.")
     });
 
     ToolAgent agent(ai, registry);
 
-    const std::string answer =
-        agent.run("Test malformed tool arguments.");
+    const auto report =
+        agent.runWithDiagnostics("Test malformed arguments.");
 
-    assert(answer == "The tool arguments were invalid.");
+    assert(report.answer == "The tool request was invalid.");
+    assert(report.toolCallsRejected == 1);
+    assert(report.toolCallsSucceeded == 0);
+    assert(report.toolCalls.size() == 1);
+    assert(report.toolCalls[0].outcome == "malformed");
+
+    assert(executionCount == 0);
 
     const Json& resultMessage = ai.seenMessages[1].back();
 
-    assert(resultMessage["content"] ==
-           "Tool error: Tool arguments must be a JSON object.");
+    assert(
+        resultMessage["content"].get<std::string>().find(
+            "tool request was malformed"
+        ) != std::string::npos
+    );
 }
 
-static void testRoundLimitPreventsExecution() {
+// 4. Registry schema validation must prevent the handler from running.
+static void testSchemaFailureIsReported() {
     ToolRegistry registry;
     int executionCount = 0;
+    registerEchoTool(registry, &executionCount);
+
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({
+            makeToolCall("echo_text", Json::object())
+        })),
+        finalAnswer("The required tool argument was missing.")
+    });
+
+    ToolAgent agent(ai, registry);
+
+    const auto report =
+        agent.runWithDiagnostics("Test a missing required field.");
+
+    assert(
+        report.answer ==
+        "The required tool argument was missing."
+    );
+    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsSucceeded == 0);
+    assert(report.toolCallsRejected == 0);
+    assert(report.toolCalls.size() == 1);
+    assert(report.toolCalls[0].outcome == "failed");
+
+    assert(executionCount == 0);
+
+    const Json& resultMessage = ai.seenMessages[1].back();
+
+    assert(
+        resultMessage["content"].get<std::string>().find(
+            "Missing required argument: text"
+        ) != std::string::npos
+    );
+}
+
+// 5. A failed handler must not be counted as successful.
+static void testHandlerFailureIsReported() {
+    ToolRegistry registry;
+
+    registry.registerTool(
+        {
+            "failing_tool",
+            "A tool that deliberately fails in a test.",
+            {{"type", "object"}}
+        },
+        [](const Json&) -> ToolResult {
+            return {false, "Expected test failure."};
+        }
+    );
+
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({
+            makeToolCall("failing_tool", Json::object())
+        })),
+        finalAnswer(
+            "The tool failed, so the task was not completed."
+        )
+    });
+
+    ToolAgent agent(ai, registry);
+
+    const auto report =
+        agent.runWithDiagnostics("Run the failing tool.");
+
+    assert(
+        report.answer ==
+        "The tool failed, so the task was not completed."
+    );
+    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsSucceeded == 0);
+    assert(report.toolCallsRejected == 0);
+    assert(report.toolCalls.size() == 1);
+    assert(report.toolCalls[0].outcome == "failed");
+
+    const Json& resultMessage = ai.seenMessages[1].back();
+
+    assert(
+        resultMessage["content"] ==
+        "Tool error: Expected test failure."
+    );
+}
+
+// 6. A malformed model response must fail safely.
+static void testMalformedModelResponseIsRejected() {
+    ToolRegistry registry;
+
+    FakeChatClient ai(std::vector<Json>{
+        {
+            {"message", {
+                {"role", "assistant"},
+                {"content", ""},
+                {"tool_calls", "not an array"}
+            }}
+        }
+    });
+
+    ToolAgent agent(ai, registry);
+
+    bool rejected = false;
+
+    try {
+        agent.run("Test a malformed model response.");
+    }
+    catch (const std::runtime_error&) {
+        rejected = true;
+    }
+
+    assert(rejected);
+    assert(ai.seenMessages.size() == 1);
+}
+
+// 7. Reaching the round limit must prevent execution.
+static void testRoundLimitPreventsExecution() {
+    int executionCount = 0;
+    ToolRegistry registry;
 
     registry.registerTool(
         {
@@ -189,23 +353,31 @@ static void testRoundLimitPreventsExecution() {
         }
     );
 
-    FakeChatClient ai({
-        toolRequest("count_execution", Json::object())
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({
+            makeToolCall("count_execution", Json::object())
+        }))
     });
 
     ToolAgent agent(ai, registry, 0, 4);
 
-    const std::string answer =
-        agent.run("Attempt a tool request.");
+    const auto report =
+        agent.runWithDiagnostics("Attempt a tool request.");
 
-    assert(answer.find("tool-round limit") != std::string::npos);
+    assert(
+        report.stopReason ==
+        numerick::AgentStopReason::ToolRoundLimitReached
+    );
+    assert(report.modelRequests == 1);
+    assert(report.toolCallsRequested == 1);
     assert(executionCount == 0);
     assert(ai.seenMessages.size() == 1);
 }
 
+// 8. A request exceeding the call limit must not partially execute.
 static void testCallLimitPreventsExecution() {
-    ToolRegistry registry;
     int executionCount = 0;
+    ToolRegistry registry;
 
     registry.registerTool(
         {
@@ -219,40 +391,35 @@ static void testCallLimitPreventsExecution() {
         }
     );
 
-    Json response = {
-        {"message", {
-            {"role", "assistant"},
-            {"content", ""},
-            {"tool_calls", Json::array({
-                {
-                    {"function", {
-                        {"name", "count_execution"},
-                        {"arguments", Json::object()}
-                    }}
-                },
-                {
-                    {"function", {
-                        {"name", "count_execution"},
-                        {"arguments", Json::object()}
-                    }}
-                }
-            })}
-        }}
-    };
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({
+            makeToolCall(
+                "count_execution", Json::object(), "call_1"
+            ),
+            makeToolCall(
+                "count_execution", Json::object(), "call_2"
+            )
+        }))
+    });
 
-    FakeChatClient ai({response});
     ToolAgent agent(ai, registry, 3, 1);
 
-    const std::string answer =
-        agent.run("Request too many calls.");
+    const auto report =
+        agent.runWithDiagnostics("Request too many calls.");
 
-    assert(answer.find("tool-call limit") != std::string::npos);
+    assert(
+        report.stopReason ==
+        numerick::AgentStopReason::ToolCallLimitReached
+    );
+    assert(report.toolCallsRequested == 2);
     assert(executionCount == 0);
+    assert(ai.seenMessages.size() == 1);
 }
 
+// 9. Blank prompts must be rejected before contacting the client.
 static void testEmptyPromptIsRejected() {
     ToolRegistry registry;
-    FakeChatClient ai({});
+    FakeChatClient ai(std::vector<Json>{});
     ToolAgent agent(ai, registry);
 
     bool rejected = false;
@@ -272,6 +439,9 @@ int main() {
     testSuccessfulToolCycle();
     testUnknownToolIsRejected();
     testMalformedArgumentsAreRejected();
+    testSchemaFailureIsReported();
+    testHandlerFailureIsReported();
+    testMalformedModelResponseIsRejected();
     testRoundLimitPreventsExecution();
     testCallLimitPreventsExecution();
     testEmptyPromptIsRejected();

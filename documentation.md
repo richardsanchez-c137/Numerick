@@ -833,3 +833,81 @@ The registry tests now also cover missing required arguments, type mismatches, u
 This is a deliberately limited schema validator, not a complete JSON Schema implementation. Nested schema validation, numeric ranges, string patterns, enums, array item constraints, and other advanced JSON Schema features are not implemented.
 
 The validator reduces malformed tool requests but does not replace permission checks or approval requirements for consequential operations.
+
+
+### Milestone 4.2 — Tool validation, diagnostics and safety tests
+
+**Status: Implemented; automated tests and initial live integration test passed.**
+
+#### Tool argument validation
+
+- Added registration-time validation for supported tool schema definitions.
+- Added checks for required properties and basic JSON types.
+- Rejects missing required arguments.
+- Rejects argument type mismatches.
+- Rejects undeclared arguments when `additionalProperties` is false.
+- Rejects malformed schemas and unsupported property types.
+
+The validator implements a limited subset of JSON Schema rather than the full standard.
+
+#### Agent diagnostics
+
+Added `AgentRunReport` and `ToolCallDiagnostic` to expose:
+
+- Number of model requests.
+- Tool rounds and requested tool-call counts.
+- Successful, failed and rejected tool calls.
+- Tool names and outcome classifications.
+- Reasons for stopping when tool-call or tool-round limits are reached.
+
+The application writes diagnostic counts and tool outcomes to the activity log without recording full prompts, argument values, or tool output contents.
+
+#### Automated safety coverage
+
+The tool-agent tests cover:
+
+- Successful tool execution and result delivery.
+- Unknown tool names.
+- Malformed tool arguments and model responses.
+- Registry schema-validation failures.
+- Handler failures.
+- Empty prompts.
+- Tool-round and tool-call limits.
+- Confirmation that handlers do not run when execution limits are exceeded.
+
+#### Verification results
+
+- CMake build: Passed.
+- Command parser tests: Passed.
+- Tool registry tests: Passed.
+- Built-in tool tests: Passed.
+- Tool-agent tests: Passed.
+- CTest: 4 of 4 test suites passed.
+
+#### Live integration test
+
+The local Qwen 3.5 4B model successfully requested the registered `get_local_time` tool.
+
+Recorded diagnostic results:
+
+- Model requests: 2.
+- Tool rounds: 1.
+- Tool calls requested: 1.
+- Tool calls succeeded: 1.
+- Tool calls failed: 0.
+- Tool calls rejected: 0.
+- Stop reason: `completed`.
+
+The tool returned its result, and Qwen generated the final natural-language answer.
+
+#### Remaining limitations
+
+- JSON Schema validation is incomplete.
+- The live integration test covers the local-time workflow, not every possible model response.
+- No general approval system for consequential actions is implemented.
+- No file-modifying or general-purpose operating-system tools have been registered.
+- Voice input, camera integration and persistent conversational memory remain unimplemented.
+
+#### Next objective
+
+Continue hardening the live agent workflow and test additional failure cases before introducing tools that access files, repositories or applications.

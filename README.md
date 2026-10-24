@@ -271,3 +271,15 @@ This is a limited subset of JSON Schema. It does not currently implement nested 
 
 Automated tests cover invalid definitions, missing arguments, mismatched types, unexpected arguments, and handler execution failures.
 
+
+### Tool Safety and Diagnostics
+
+The tool registry validates supported schema definitions at registration time and validates tool arguments before invoking handlers.
+
+The current validator supports required properties, basic JSON types, and the `additionalProperties` boolean. It does not implement every JSON Schema feature.
+
+The tool agent also produces diagnostic reports containing model-request counts, tool-call outcomes, and execution-limit stop reasons. The activity log records metadata without storing full AI prompts or tool arguments.
+
+Automated tests cover successful tool execution, unknown tools, malformed requests, schema-validation failures, handler failures, empty prompts, and execution limits.
+
+The local Qwen integration has successfully completed an initial end-to-end `get_local_time` tool call. This is an initial integration test, not proof that every tool interaction is reliable.
