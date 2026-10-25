@@ -10,6 +10,32 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Voice dependencies installed through MSYS2 UCRT64.
+set(NUMERICK_MSYS2_PREFIX "C:/msys64/ucrt64" CACHE PATH
+    "MSYS2 UCRT64 installation prefix")
+
+find_package(whisper CONFIG REQUIRED
+    HINTS "${NUMERICK_MSYS2_PREFIX}/lib/cmake/whisper"
+)
+
+find_path(SDL2_INCLUDE_DIR
+    NAMES SDL.h
+    PATH_SUFFIXES SDL2
+    HINTS "${NUMERICK_MSYS2_PREFIX}/include"
+)
+
+find_library(SDL2_LIBRARY
+    NAMES SDL2
+    HINTS "${NUMERICK_MSYS2_PREFIX}/lib"
+)
+
+if(NOT SDL2_INCLUDE_DIR OR NOT SDL2_LIBRARY)
+    message(FATAL_ERROR
+        "SDL2 was not found. Install mingw-w64-ucrt-x86_64-SDL2 "
+        "in MSYS2 UCRT64, or set NUMERICK_MSYS2_PREFIX."
+    )
+endif()
+
 function(numerick_enable_warnings target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4)
@@ -25,6 +51,8 @@ endfunction()
 # Main application
 add_executable(numerick
     src/main.cpp
+    src/core/voice.cpp
+    src/core/ai_client.cpp
     src/core/ai_client.cpp
     src/core/ollama_response.cpp
     src/core/ollama_config.cpp
@@ -37,8 +65,19 @@ add_executable(numerick
     src/tools/builtin_tools.cpp
 )
 
-target_include_directories(numerick PRIVATE include)
-target_link_libraries(numerick PRIVATE winhttp)
+target_include_directories(numerick PRIVATE
+    include
+    "${SDL2_INCLUDE_DIR}"
+)
+
+target_link_libraries(numerick PRIVATE
+    winhttp
+    whisper
+    "${SDL2_LIBRARY}"
+    sapi
+    ole32
+    uuid
+)
 numerick_enable_warnings(numerick)
 
 # Automated tests

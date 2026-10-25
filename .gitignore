@@ -27,3 +27,6 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local speech recognition model weights
+models/

@@ -2,7 +2,9 @@ name: Windows UCRT64 CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feature/**'
   pull_request:
   workflow_dispatch:
 
@@ -37,7 +39,9 @@ jobs:
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-nlohmann-json
-
+            mingw-w64-ucrt-x86_64-whisper.cpp
+            mingw-w64-ucrt-x86_64-SDL2
+            
       - name: Configure fresh build
         run: cmake -S . -B build -G Ninja
 
