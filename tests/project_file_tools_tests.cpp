@@ -224,8 +224,74 @@ static void testRejectsSymlinkEscapeWhenPlatformAllowsSymlinkCreation() {
     assert(!result.success);
 }
 
+static void testRegistersSearchAndSymbolTools() {
+    TemporaryWorkspace workspace;
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+
+    assert(registry.contains("search_project_files"));
+    assert(registry.contains("find_cpp_symbol"));
+    assert(!registry.contains("write_project_file"));
+    assert(!registry.contains("run_shell_command"));
+}
+
+static void testSearchProjectFilesReturnsPathAndLineMatches() {
+    TemporaryWorkspace workspace;
+    writeText(workspace.root() / "src" / "main.cpp",
+        "#include <string>\nint main() {\n    const std::string marker = \"NeedleValue\";\n    return 0;\n}\n");
+    writeText(workspace.root() / "secrets" / "credentials.json", "NeedleValue hidden\n");
+    writeText(workspace.root() / "build" / "output.txt", "NeedleValue generated\n");
+
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+    const ToolResult result = call(
+        registry, "search_project_files", {{"query", "needlevalue"}}
+    );
+
+    assert(result.success);
+    assert(result.output.find("src/main.cpp:3:") != std::string::npos);
+    assert(result.output.find("NeedleValue") != std::string::npos);
+    assert(result.output.find("credentials.json") == std::string::npos);
+    assert(result.output.find("output.txt") == std::string::npos);
+}
+
+static void testFindCppSymbolUsesWholeIdentifierBoundaries() {
+    TemporaryWorkspace workspace;
+    writeText(workspace.root() / "src" / "agent.cpp",
+        "int runAgent();\nint runAgentFast();\nvoid caller() { runAgent(); }\n");
+    writeText(workspace.root() / "docs" / "notes.md", "runAgent is discussed here.\n");
+
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+    const ToolResult result = call(
+        registry, "find_cpp_symbol", {{"symbol", "runAgent"}}
+    );
+
+    assert(result.success);
+    assert(result.output.find("src/agent.cpp:1:") != std::string::npos);
+    assert(result.output.find("src/agent.cpp:3:") != std::string::npos);
+    assert(result.output.find("src/agent.cpp:2:") == std::string::npos);
+    assert(result.output.find("not a C++ parser") != std::string::npos);
+    assert(result.output.find("notes.md") == std::string::npos);
+}
+
+static void testFindCppSymbolRejectsInvalidIdentifiers() {
+    TemporaryWorkspace workspace;
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+    const ToolResult result = call(
+        registry, "find_cpp_symbol", {{"symbol", "../secret"}}
+    );
+    assert(!result.success);
+    assert(result.output.find("valid C++ identifier") != std::string::npos);
+}
+
 int main() {
     testRegistersOnlyReadOnlyProjectTools();
+    testRegistersSearchAndSymbolTools();
+    testSearchProjectFilesReturnsPathAndLineMatches();
+    testFindCppSymbolUsesWholeIdentifierBoundaries();
+    testFindCppSymbolRejectsInvalidIdentifiers();
     testListsSafeProjectEntriesAndFiltersPrivateFolders();
     testReadsAllowlistedTextFile();
     testBlocksTraversalAbsolutePathsAndPrivateFiles();

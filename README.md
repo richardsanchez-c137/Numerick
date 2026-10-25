@@ -4,7 +4,7 @@
 
 NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
 
-## Current development status — 0.6.0
+## Current development status — 0.7.0
 
 Implemented:
 - C++17 command-line assistant
@@ -14,7 +14,7 @@ Implemented:
 - Read-only `get_local_time` tool
 - Explicit persistent facts stored locally in `data/memory.json`
 - `remember`, `memories`, and `forget` commands
-- Read-only project workspace tools: `list_project_files` and `read_project_file`
+- Read-only workspace tools: `list_project_files`, `read_project_file`, `search_project_files`, and `find_cpp_symbol`
 - Automated tests through CMake and CTest
 
 ## Commands
@@ -47,12 +47,14 @@ Facts are stored in `data/memory.json`; `data/` is ignored by Git. Saved facts m
 
 Saved facts survive application restarts. Ordinary conversation history remains session-only and retains up to 10 completed turns. These are separate systems. Memory is local plaintext, not encrypted. Save only information you are comfortable sending to the configured local Ollama model in prompts.
 
-## Read-only project file tools
+## Read-only workspace and codebase tools
 
 The `agent` command can use these registered tools when a request requires project-file inspection:
 
 - `list_project_files`: lists accessible entries in a directory relative to the workspace root. Use `.` for the root.
 - `read_project_file`: reads one allowlisted text file by workspace-relative path.
+- `search_project_files`: searches allowlisted workspace text files for a literal, case-insensitive query and returns path/line/snippet matches. Scans are bounded.
+- `find_cpp_symbol`: searches C/C++ source and header files for whole-identifier occurrences and reports line numbers. This is bounded text search, not a compiler-grade parser.
 
 The default workspace root is the process's current working directory. Start NUMERICK from the repository root to give it access to that project. To select a different root, set `NUMERICK_WORKSPACE_ROOT` before launching the application:
 
@@ -62,6 +64,8 @@ $env:NUMERICK_WORKSPACE_ROOT = "D:\GitHub\Projects\SomeOtherProject"
 ```
 
 The tools are read-only: there are no file-writing, deletion, process-execution, or arbitrary shell tools. They reject absolute paths and `..` traversal, verify resolved paths stay under the canonical workspace root, filter private directories such as `.git`, `build`, `data`, and `logs`, block common secret filenames and key/database/binary extensions, allowlist text file types, cap reads at 256 KiB, and cap returned content at 12 KiB. Files returned by these tools are marked as untrusted data in their tool response and the agent system prompt instructs the model not to follow instructions inside files.
+
+Search and symbol lookup reuse the same workspace path checks, blocked-directory rules, filename/extension filters, UTF-8 checks, and file-size limits as the read-only file tools. Search is bounded and may not visit every file in a very large workspace.
 
 These filters reduce accidental exposure but are not a complete operating-system sandbox. Run NUMERICK as a normal user account, and choose the workspace root deliberately. Do not point it at your entire home directory or a folder containing unrelated private files.
 
@@ -95,7 +99,7 @@ Run NUMERICK:
 - Memory context uses a character limit rather than a tokenizer-aware token budget.
 - JSON Schema validation supports only a subset of the standard.
 - Project file tools are read-only and intentionally exclude many paths and file types; they are not a substitute for a full security sandbox.
-- Only local-time and scoped project-file tools are registered. Arbitrary shell commands and computer control are not enabled.
+- Only local-time and scoped, read-only workspace/codebase tools are registered. Arbitrary shell commands and computer control are not enabled.
 - Voice, camera understanding, web research, and a graphical interface are not implemented.
 
 ## Project principles

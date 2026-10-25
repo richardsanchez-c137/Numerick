@@ -429,6 +429,234 @@ std::string readProjectFile(
     return output.str();
 }
 
+std::string readSearchableFile(const fs::path& file) {
+    std::error_code error;
+    const std::uintmax_t size = fs::file_size(file, error);
+    if (error || size > kMaxFileBytes) {
+        return {};
+    }
+
+    std::ifstream input(file, std::ios::binary);
+    if (!input) {
+        return {};
+    }
+
+    std::string contents{
+        std::istreambuf_iterator<char>(input),
+        std::istreambuf_iterator<char>()
+    };
+    if (input.bad() || contents.find('\0') != std::string::npos ||
+        !isValidUtf8(contents)) {
+        return {};
+    }
+    return contents;
+}
+
+bool isCppSourceFile(const fs::path& path) {
+    const std::string extension = lowerAscii(path.extension().string());
+    static const std::set<std::string> cppExtensions = {
+        ".cpp", ".cxx", ".cc", ".c", ".h", ".hpp", ".hxx",
+        ".ipp", ".inl"
+    };
+    return cppExtensions.find(extension) != cppExtensions.end();
+}
+
+bool isIdentifierCharacter(unsigned char character) {
+    return std::isalnum(character) != 0 || character == '_';
+}
+
+bool containsCppIdentifier(const std::string& line, const std::string& symbol) {
+    std::size_t position = line.find(symbol);
+    while (position != std::string::npos) {
+        const bool leftBoundary = position == 0 ||
+            !isIdentifierCharacter(static_cast<unsigned char>(line[position - 1]));
+        const std::size_t after = position + symbol.size();
+        const bool rightBoundary = after >= line.size() ||
+            !isIdentifierCharacter(static_cast<unsigned char>(line[after]));
+        if (leftBoundary && rightBoundary) {
+            return true;
+        }
+        position = line.find(symbol, position + 1);
+    }
+    return false;
+}
+
+bool isValidCppIdentifier(const std::string& symbol) {
+    if (symbol.empty() || symbol.size() > 128) {
+        return false;
+    }
+    const unsigned char first = static_cast<unsigned char>(symbol.front());
+    if (!(std::isalpha(first) != 0 || first == '_')) {
+        return false;
+    }
+    for (unsigned char character : symbol) {
+        if (!isIdentifierCharacter(character)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string searchWorkspace(
+    const fs::path& canonicalRoot,
+    const std::string& rawQuery,
+    bool cppOnly,
+    bool identifierOnly,
+    bool caseInsensitive
+) {
+    const std::string query = trim(rawQuery);
+    if (query.empty()) {
+        throw std::invalid_argument("A non-empty search query is required.");
+    }
+    if (query.size() > 200) {
+        throw std::invalid_argument("Search query must be at most 200 bytes.");
+    }
+    if (identifierOnly && !isValidCppIdentifier(query)) {
+        throw std::invalid_argument(
+            "Symbol must be a valid C++ identifier (letters, digits, underscores; "
+            "not starting with a digit)."
+        );
+    }
+
+    constexpr std::size_t kMaxVisitedEntries = 5000;
+    constexpr std::size_t kMaxCandidateFiles = 1000;
+    constexpr std::size_t kMaxFilesToRead = 300;
+    constexpr std::size_t kMaxMatches = 25;
+    constexpr std::size_t kMaxOutputBytes = 10 * 1024;
+    constexpr std::size_t kMaxSnippetBytes = 220;
+
+    std::vector<fs::path> candidates;
+    candidates.reserve(256);
+    std::error_code iteratorError;
+    fs::recursive_directory_iterator iterator(
+        canonicalRoot,
+        fs::directory_options::skip_permission_denied,
+        iteratorError
+    );
+    const fs::recursive_directory_iterator end;
+    std::size_t visitedEntries = 0;
+    bool traversalTruncated = false;
+
+    while (!iteratorError && iterator != end) {
+        if (++visitedEntries > kMaxVisitedEntries) {
+            traversalTruncated = true;
+            break;
+        }
+
+        const fs::path entryPath = iterator->path();
+        const std::string name = entryPath.filename().string();
+        std::error_code statusError;
+        const fs::file_status linkStatus = iterator->symlink_status(statusError);
+        if (statusError || fs::is_symlink(linkStatus)) {
+            if (iterator->is_directory(statusError)) {
+                iterator.disable_recursion_pending();
+            }
+        }
+        else if (iterator->is_directory(statusError) && !statusError) {
+            if (isBlockedComponent(name) || isSensitiveFilename(name)) {
+                iterator.disable_recursion_pending();
+            }
+        }
+        else if (iterator->is_regular_file(statusError) && !statusError &&
+                 !isBlockedComponent(name) && !isSensitiveFilename(name) &&
+                 isReadableTextFile(entryPath) && (!cppOnly || isCppSourceFile(entryPath))) {
+            const fs::path relative = entryPath.lexically_relative(canonicalRoot);
+            if (!containsBlockedComponent(relative) &&
+                isContainedByRoot(fs::weakly_canonical(entryPath, statusError), canonicalRoot) &&
+                !statusError) {
+                candidates.push_back(entryPath);
+                if (candidates.size() >= kMaxCandidateFiles) {
+                    traversalTruncated = true;
+                    break;
+                }
+            }
+        }
+
+        iterator.increment(iteratorError);
+        if (iteratorError) {
+            iteratorError.clear();
+        }
+    }
+
+    std::sort(candidates.begin(), candidates.end());
+    const bool fileSetTruncated = candidates.size() > kMaxFilesToRead;
+    if (fileSetTruncated) {
+        candidates.resize(kMaxFilesToRead);
+    }
+
+    const std::string searchNeedle = caseInsensitive ? lowerAscii(query) : query;
+    std::ostringstream output;
+    output << (identifierOnly ? "C++ identifier occurrences for '" : "Text matches for '")
+           << query << "' (read-only, workspace-scoped):\n";
+    std::size_t matches = 0;
+    bool outputTruncated = false;
+    bool matchLimitReached = false;
+
+    for (const fs::path& file : candidates) {
+        const std::string contents = readSearchableFile(file);
+        if (contents.empty()) {
+            continue;
+        }
+
+        std::istringstream lines(contents);
+        std::string line;
+        std::size_t lineNumber = 0;
+        while (std::getline(lines, line)) {
+            ++lineNumber;
+            const bool found = identifierOnly
+                ? containsCppIdentifier(line, query)
+                : (caseInsensitive
+                    ? lowerAscii(line).find(searchNeedle) != std::string::npos
+                    : line.find(searchNeedle) != std::string::npos);
+            if (!found) {
+                continue;
+            }
+
+            std::string snippet = line;
+            if (snippet.size() > kMaxSnippetBytes) {
+                snippet = safeTruncateUtf8(snippet, kMaxSnippetBytes - 3) + "...";
+            }
+            const std::string relative = file.lexically_relative(canonicalRoot).generic_string();
+            std::ostringstream entry;
+            entry << relative << ':' << lineNumber << ": " << snippet << '\n';
+            const std::string rendered = entry.str();
+            if (output.tellp() >= 0 &&
+                static_cast<std::size_t>(output.tellp()) + rendered.size() > kMaxOutputBytes) {
+                outputTruncated = true;
+                break;
+            }
+            output << rendered;
+            ++matches;
+            if (matches >= kMaxMatches) {
+                matchLimitReached = true;
+                break;
+            }
+        }
+        if (outputTruncated || matchLimitReached) {
+            break;
+        }
+    }
+
+    if (matches == 0) {
+        output << "(No matches found in the accessible files scanned.)\n";
+    }
+    if (traversalTruncated || fileSetTruncated) {
+        output << "[Scan bounded for safety; some workspace files may not have been scanned. "
+                  "Use a narrower query or a subdirectory-specific follow-up.]\n";
+    }
+    if (matchLimitReached) {
+        output << "[Match limit reached; narrow the query for more precise results.]\n";
+    }
+    if (outputTruncated) {
+        output << "[Output limit reached; narrow the query for more precise results.]\n";
+    }
+    if (identifierOnly) {
+        output << "Note: this is a bounded text-based identifier search, not a C++ parser; "
+                  "results may include references as well as declarations or definitions.";
+    }
+    return output.str();
+}
+
 } // namespace
 
 fs::path configuredWorkspaceRoot() {
@@ -521,6 +749,73 @@ void registerProjectFileTools(
                 return {true, readProjectFile(
                     canonicalRoot,
                     requireStringArgument(arguments, "path")
+                )};
+            }
+            catch (const std::exception& exception) {
+                return {false, exception.what()};
+            }
+        }
+    );
+    registry.registerTool(
+        {
+            "search_project_files",
+            "Searches allowlisted text files inside the configured workspace for a literal, "
+            "case-insensitive query and returns file paths, line numbers, and snippets. "
+            "The scan is bounded and excludes private folders, secrets, binary files, and build output.",
+            {
+                {"type", "object"},
+                {"properties", {
+                    {"query", {{"type", "string"}}}
+                }},
+                {"required", {"query"}},
+                {"additionalProperties", false}
+            }
+        },
+        [canonicalRoot](const Json& arguments) -> ToolResult {
+            try {
+                return {true, searchWorkspace(
+                    canonicalRoot,
+                    requireStringArgument(arguments, "query"),
+                    false,
+                    false,
+                    true
+                )};
+            }
+            catch (const std::exception& exception) {
+                return {false, exception.what()};
+            }
+        }
+    );
+
+    registry.registerTool(
+        {
+            "find_cpp_symbol",
+            "Finds bounded, whole-identifier occurrences of a C++ identifier in allowlisted C/C++ "
+            "source and header files. This is a text-based search, not a full compiler parser.",
+            {
+                {"type", "object"},
+                {"properties", {
+                    {"symbol", {{"type", "string"}}}
+                }},
+                {"required", {"symbol"}},
+                {"additionalProperties", false}
+            }
+        },
+        [canonicalRoot](const Json& arguments) -> ToolResult {
+            try {
+                const std::string symbol = requireStringArgument(arguments, "symbol");
+                if (!isValidCppIdentifier(trim(symbol))) {
+                    throw std::invalid_argument(
+                        "Symbol must be a valid C++ identifier (letters, digits, underscores; "
+                        "not starting with a digit)."
+                    );
+                }
+                return {true, searchWorkspace(
+                    canonicalRoot,
+                    trim(symbol),
+                    true,
+                    true,
+                    false
                 )};
             }
             catch (const std::exception& exception) {
