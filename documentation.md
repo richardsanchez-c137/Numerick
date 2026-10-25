@@ -930,3 +930,35 @@ Continue hardening the live agent workflow and test additional failure cases bef
 ### Notes
 - Automated tests use a fake ChatClient to verify agent behavior deterministically.
 - The Ollama checks are manual end-to-end verification, not automated integration tests.
+
+## 2026-10-25 — In-Memory Conversation Sessions
+
+**Version:** 0.4.0
+
+### Changes
+- Added bounded, in-memory conversation sessions.
+- Retained recent conversation turns across separate `agent` commands.
+- Integrated existing conversation history with tool-agent execution.
+- Preserved tool interactions in the conversation transcript.
+- Added session and agent-conversation test suites.
+- Displayed the conversation-history limit at startup.
+
+### Automated verification
+- Command parser tests: Passed.
+- Tool registry tests: Passed.
+- Built-in tool tests: Passed.
+- Tool agent tests: Passed.
+- Conversation session tests: Passed.
+- Tool agent conversation tests: Passed.
+- CTest: 6 of 6 test suites passed.
+
+### Live verification
+- NUMERICK recalled the fictional project ID `MINT-482` in a subsequent command.
+- The `agent` command obtained a current timestamp through `get_local_time`.
+- A subsequent request correctly identified `get_local_time` as the tool used.
+- Manual verification confirmed context continuity for these scenarios.
+
+### Limitations
+- Conversation history is held in RAM and is lost when the application exits.
+- The history limit is bounded by turns; it is not a token-based context budget.
+- Live testing covered the scenarios listed above, not every possible conversation or tool sequence.

@@ -285,3 +285,5 @@ Automated tests cover successful tool execution, unknown tools, malformed reques
 The local Qwen integration has successfully completed an initial end-to-end `get_local_time` tool call. This is an initial integration test, not proof that every tool interaction is reliable.
 
 - **Agent diagnostics:** Tracks model requests, tool rounds, tool-call outcomes, and stop reasons. The agent can answer directly without invoking unnecessary tools.
+
+- **Conversation sessions:** Retains the latest 10 completed turns in memory across `agent` commands, including tool-assisted interactions. Session history resets when NUMERICK exits.

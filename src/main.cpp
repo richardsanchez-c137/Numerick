@@ -1,7 +1,7 @@
-
 #include "numerick/ai_client.hpp"
 #include "numerick/builtin_tools.hpp"
 #include "numerick/command_parser.hpp"
+#include "numerick/conversation_session.hpp"
 #include "numerick/tool_agent.hpp"
 #include "numerick/tool_registry.hpp"
 
@@ -11,16 +11,39 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
 
 namespace fs = std::filesystem;
+using Json = nlohmann::json;
+
+namespace {
+
+constexpr const char* kAskSystemPrompt =
+    "You are NUMERICK, a personal AI assistant. "
+    "Answer clearly and directly. Be concise for ordinary questions. "
+    "Never claim to have performed an action unless it was verified.";
+
+constexpr const char* kAgentSystemPrompt =
+    "You are NUMERICK, a personal AI assistant. "
+    "Answer clearly and concisely. Use registered tools "
+    "when they are appropriate for obtaining real "
+    "information. When asked for the current local time, "
+    "call get_local_time and use its returned result. "
+    "Never guess the current time or claim a tool "
+    "succeeded without its result. If a tool fails, "
+    "explain that failure honestly. Use only the tools "
+    "provided with this request.";
+
+} // namespace
 
 class Numerick {
 public:
     Numerick()
         : aiClient_(),
-          toolAgent_(aiClient_, registry_) {
+          toolAgent_(aiClient_, registry_),
+          conversation_(10) {
         fs::create_directories("data");
         logFile_.open("data/activity.log", std::ios::app);
 
@@ -58,7 +81,7 @@ public:
                 continue;
             }
 
-            // Do not record the user's entire AI prompt in the log.
+            // Do not record the user's entire AI prompt in the activity log.
             if (command.type == numerick::CommandType::Ask ||
                 command.type == numerick::CommandType::Agent) {
                 log(
@@ -77,6 +100,11 @@ public:
     }
 
 private:
+    numerick::ToolRegistry registry_;
+    numerick::AIClient aiClient_;
+    numerick::ToolAgent toolAgent_;
+    numerick::ConversationSession conversation_;
+    std::ofstream logFile_;
 
     static const char* stopReasonName(
         numerick::AgentStopReason reason
@@ -94,10 +122,6 @@ private:
 
         return "unknown";
     }
-    numerick::ToolRegistry registry_;
-    numerick::AIClient aiClient_;
-    numerick::ToolAgent toolAgent_;
-    std::ofstream logFile_;
 
     static std::string currentTime() {
         const auto now = std::chrono::system_clock::now();
@@ -143,6 +167,9 @@ private:
             << "AI model: Qwen 3.5 4B via Ollama\n"
             << "Registered tools: "
             << registry_.definitions().size() << '\n'
+            << "Conversation history: last "
+            << conversation_.maxTurns()
+            << " completed turns in memory\n"
             << "Type 'help' to see available commands.\n";
     }
 
@@ -164,7 +191,7 @@ private:
             break;
 
         case CommandType::Time:
-            // Preserve the original direct time command.
+            // Preserve the existing direct time command.
             std::cout
                 << "NUMERICK > Local time: "
                 << currentTime() << '\n';
@@ -176,6 +203,7 @@ private:
 #else
             std::system("clear");
 #endif
+            // Clearing the terminal does not clear the conversation.
             printWelcome();
             break;
 
@@ -189,12 +217,44 @@ private:
             std::cout << "NUMERICK > Thinking...\n";
 
             try {
+                const Json messages = conversation_.buildMessages(
+                    command.argument,
+                    kAskSystemPrompt
+                );
+
+                const Json response = aiClient_.chat(messages);
+
+                if (!response.is_object() ||
+                    !response.contains("message") ||
+                    !response["message"].is_object() ||
+                    !response["message"].contains("content") ||
+                    !response["message"]["content"].is_string()) {
+                    throw std::runtime_error(
+                        "Ollama response did not contain text content."
+                    );
+                }
+
+                const Json assistantMessage = response["message"];
                 const std::string answer =
-                    aiClient_.ask(command.argument);
+                    assistantMessage["content"].get<std::string>();
 
-                std::cout << "\nNUMERICK > "
-                          << answer << '\n';
+                // Save the actual model message; do not include the UI-only
+                // truncation warning in the conversational transcript.
+                conversation_.recordTurn(
+                    command.argument,
+                    Json::array({assistantMessage})
+                );
 
+                std::cout << "\nNUMERICK > " << answer;
+
+                if (response.value(
+                        "done_reason", std::string{}) == "length") {
+                    std::cout
+                        << "\n\n[NUMERICK: The response may be incomplete "
+                        << "because the output limit was reached.]";
+                }
+
+                std::cout << '\n';
                 log("AI response received");
             }
             catch (const std::exception& error) {
@@ -219,10 +279,21 @@ private:
 
             std::cout << "NUMERICK > Working on it...\n";
 
-            
             try {
+                const Json messages = conversation_.buildMessages(
+                    command.argument,
+                    kAgentSystemPrompt
+                );
+
                 const numerick::AgentRunReport report =
-                    toolAgent_.runWithDiagnostics(command.argument);
+                    toolAgent_.runWithConversationDiagnostics(messages);
+
+                // The report includes assistant tool-call messages, tool
+                // results, and the final answer for this completed turn.
+                conversation_.recordTurn(
+                    command.argument,
+                    report.turnMessages
+                );
 
                 std::cout << "\nNUMERICK > "
                           << report.answer << '\n';
@@ -261,17 +332,6 @@ private:
                     std::string(error.what())
                 );
             }
-
-            catch (const std::exception& error) {
-                std::cout
-                    << "\nNUMERICK > The agent request failed.\n"
-                    << "Details: " << error.what() << '\n';
-
-                log(
-                    "Agent request failed: " +
-                    std::string(error.what())
-                );
-            }
             break;
 
         case CommandType::Exit:
@@ -299,9 +359,9 @@ private:
             << "  hello             - Test the assistant\n"
             << "  status            - Show current status\n"
             << "  time              - Display local time\n"
-            << "  ask <question>    - Ask the AI without tools\n"
+            << "  ask <question>    - Ask the AI with conversation context\n"
             << "  agent <request>   - Let AI request registered tools\n"
-            << "  clear             - Clear the console\n"
+            << "  clear             - Clear the console (history remains)\n"
             << "  exit              - Shut down NUMERICK\n"
             << "\n";
     }
@@ -315,9 +375,12 @@ private:
             << "AI runtime:    Local Ollama API\n"
             << "Registered tools: "
             << registry_.definitions().size() << '\n'
+            << "Conversation history: "
+            << conversation_.turnCount() << '/'
+            << conversation_.maxTurns() << " turns\n"
             << "Voice input:   Not implemented\n"
             << "Vision:        Not implemented\n"
-            << "Memory:        Basic activity log\n"
+            << "Persistent memory: Not implemented\n"
             << "System access: No arbitrary commands\n"
             << "--------------------------------\n";
     }

@@ -1,5 +1,6 @@
-
 #pragma once
+
+#include <nlohmann/json.hpp>
 
 #include <cstddef>
 #include <string>
@@ -31,6 +32,11 @@ struct AgentRunReport {
     std::size_t toolCallsRejected = 0;
     AgentStopReason stopReason = AgentStopReason::Completed;
     std::vector<ToolCallDiagnostic> toolCalls;
+
+    // Assistant and tool messages added during this turn. This is kept
+    // separate from the prior conversation so the session can safely commit
+    // only a completed turn.
+    nlohmann::json turnMessages = nlohmann::json::array();
 };
 
 class ToolAgent {
@@ -45,9 +51,15 @@ public:
     // Compatibility method: returns just the final answer.
     std::string run(const std::string& prompt) const;
 
-    // Detailed method: returns the answer and safe execution metadata.
+    // Creates a fresh system/user message pair and runs the agent.
     AgentRunReport runWithDiagnostics(
         const std::string& prompt
+    ) const;
+
+    // Runs using an existing conversation, ending with the current user
+    // message. The first message must be a system message.
+    AgentRunReport runWithConversationDiagnostics(
+        const nlohmann::json& conversationMessages
     ) const;
 
 private:
