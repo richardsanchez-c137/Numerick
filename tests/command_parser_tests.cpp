@@ -24,6 +24,8 @@ int main() {
     // Other supported commands
     assert(parseCommand("help").type == CommandType::Help);
     assert(parseCommand("status").type == CommandType::Status);
+    assert(parseCommand("doctor").type == CommandType::Doctor);
+    assert(parseCommand(" DOCTOR ").type == CommandType::Doctor);
     assert(parseCommand("time").type == CommandType::Time);
     assert(parseCommand("clear").type == CommandType::Clear);
     assert(parseCommand("exit").type == CommandType::Exit);

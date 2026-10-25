@@ -4,7 +4,7 @@
 
 NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
 
-## Current development status — 1.0.0
+## Current development status — 1.1.0
 
 Implemented:
 - C++17 command-line assistant
@@ -12,6 +12,8 @@ Implemented:
 - `ask` and `agent` commands with bounded in-memory conversation history
 - Tool registry and agent orchestration with tool-call/round limits and diagnostics
 - Read-only `get_local_time` tool
+- `doctor` command for checking Ollama connectivity and configured model availability
+- Environment-based Ollama model, host, port, and response-timeout configuration
 - Explicit persistent facts stored locally in `data/memory.json`
 - `remember`, `memories`, and `forget` commands
 - Read-only workspace tools: `list_project_files`, `read_project_file`, `search_project_files`, `find_cpp_symbol`, `describe_project_architecture`, `inspect_cpp_component`, and `inspect_cpp_member_relationship`
@@ -46,6 +48,29 @@ Persistent memory is **opt-in**. NUMERICK does not automatically turn every conv
 Facts are stored in `data/memory.json`; `data/` is ignored by Git. Saved facts may be included in the system prompt. The prompt context is limited to the newest 20 facts and 4,000 bytes; the store supports up to 50 facts, each up to 500 characters. Exact duplicates reuse the existing ID.
 
 Saved facts survive application restarts. Ordinary conversation history remains session-only and retains up to 10 completed turns. These are separate systems. Memory is local plaintext, not encrypted. Save only information you are comfortable sending to the configured local Ollama model in prompts.
+
+## Ollama configuration and diagnostics
+
+The default endpoint is `http://127.0.0.1:11434`, and the default model is `qwen3.5:4b`. Settings are read at startup from these optional environment variables:
+
+| Variable | Default | Accepted values |
+|---|---|---|
+| `NUMERICK_OLLAMA_HOST` | `127.0.0.1` | Hostname or IPv4 address; no URL scheme or path |
+| `NUMERICK_OLLAMA_PORT` | `11434` | Integer from 1 to 65535 |
+| `NUMERICK_OLLAMA_MODEL` | `qwen3.5:4b` | Non-empty model name up to 200 characters |
+| `NUMERICK_OLLAMA_TIMEOUT_MS` | `120000` | Response timeout from 1000 to 300000 ms |
+
+Example PowerShell configuration:
+
+```powershell
+$env:NUMERICK_OLLAMA_MODEL = "qwen3.5:4b"
+$env:NUMERICK_OLLAMA_HOST = "127.0.0.1"
+$env:NUMERICK_OLLAMA_PORT = "11434"
+$env:NUMERICK_OLLAMA_TIMEOUT_MS = "180000"
+.\build-release\numerick.exe
+```
+
+Enter `doctor` to query Ollama's `/api/tags` endpoint, check that it returns a valid model list, and report whether the configured model is installed. If the model is missing, NUMERICK prints the corresponding `ollama pull` command. The check doesn't generate a model response; use `ask` or `agent` for an end-to-end inference check. Use only a trusted Ollama host because this client uses plain HTTP and does not authenticate to the endpoint.
 
 ## Read-only workspace and codebase tools
 

@@ -1,7 +1,7 @@
 # NUMERICK — Project Documentation
 
 **Project name:** NUMERICK  
-**Current version:** 1.0.0
+**Current version:** 1.1.0
 **Project stage:** Local AI assistant core with bounded memory, read-only codebase tools, component evidence reports, architecture inventory, and agent diagnostics
 **Primary language:** C++  
 **Platform:** Windows  
@@ -9,7 +9,7 @@
 **Documentation status:** Living document — update as the project evolves
 
 
-> **Current implementation snapshot — v1.0.0 (October 2026):** The sections below began as the v0.1.0 project plan; some early descriptions are historical. Current code includes a C++17 command-line assistant, local Ollama chat integration, `ask`/`agent`, bounded session history, explicit persistent facts, a validated tool registry, tool orchestration limits, local-time lookup, and seven workspace-scoped read-only tools: `list_project_files`, `read_project_file`, `search_project_files`, `find_cpp_symbol`, `describe_project_architecture`, `inspect_cpp_component`, and `inspect_cpp_member_relationship`. Agent runs also print model/tool counts and per-tool outcomes for easier troubleshooting. The workspace tools filter private/build folders and sensitive or non-text files, reject paths outside the configured root, and bound returned output. Automated tests are configured through CMake/CTest with a 30-second per-test timeout. The project also includes a Windows UCRT64 CI workflow and a PowerShell release-verification script; a green test result must be observed rather than assumed.
+> **Current implementation snapshot — v1.1.0 (October 2026):** The sections below began as the v0.1.0 project plan; some early descriptions are historical. Current code includes a C++17 command-line assistant, configurable local Ollama chat integration and `doctor` diagnostics, `ask`/`agent`, bounded session history, explicit persistent facts, a validated tool registry, tool orchestration limits, local-time lookup, and seven workspace-scoped read-only tools: `list_project_files`, `read_project_file`, `search_project_files`, `find_cpp_symbol`, `describe_project_architecture`, `inspect_cpp_component`, and `inspect_cpp_member_relationship`. Agent runs also print model/tool counts and per-tool outcomes for easier troubleshooting. The workspace tools filter private/build folders and sensitive or non-text files, reject paths outside the configured root, and bound returned output. Automated tests are configured through CMake/CTest with a 30-second per-test timeout. The project also includes validated Ollama environment configuration, a `doctor` health check, a Windows UCRT64 CI workflow, and a PowerShell release-verification script; a green test result must be observed rather than assumed.
 
 
 ---

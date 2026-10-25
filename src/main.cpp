@@ -228,8 +228,9 @@ private:
             << "          N U M E R I C K\n"
             << "       Personal Assistant Core\n"
             << "====================================\n"
-            << "Core version: 1.0.0\n"
-            << "AI model: Qwen 3.5 4B via Ollama\n"
+            << "Core version: 1.1.0\n"
+            << "AI model: " << aiClient_.config().model << '\n'
+            << "Ollama endpoint: http://" << aiClient_.config().endpoint() << '\n'
             << "Registered tools: "
             << registry_.definitions().size() << '\n'
             << "Workspace root: " << workspaceRoot_.string() << '\n'
@@ -259,6 +260,20 @@ private:
         case CommandType::Status:
             showStatus();
             break;
+
+        case CommandType::Doctor: {
+            const numerick::OllamaHealthResult result = aiClient_.diagnose();
+            std::cout << "\nNUMERICK OLLAMA DIAGNOSTICS\n"
+                      << "--------------------------------\n"
+                      << "Endpoint: http://" << aiClient_.config().endpoint() << "/api/tags\n"
+                      << "Model: " << aiClient_.config().model << '\n'
+                      << "HTTP response: " << (result.serverResponded ? "received" : "not received") << '\n'
+                      << "API response: " << (result.apiValid ? "valid" : "not verified") << '\n'
+                      << "Configured model: " << (result.modelAvailable ? "installed" : "not verified/installed") << '\n'
+                      << result.message << '\n';
+            log("Ollama doctor check completed: " + result.message);
+            break;
+        }
 
         case CommandType::Time:
             std::cout
@@ -499,6 +514,7 @@ private:
             << "  help                 - Show available commands\n"
             << "  hello                - Test the assistant\n"
             << "  status               - Show current status\n"
+            << "  doctor               - Check Ollama connection and model\n"
             << "  time                 - Display local time\n"
             << "  ask <question>       - Ask AI with conversation context\n"
             << "  agent <request>      - Let AI request registered tools\n"
@@ -516,7 +532,9 @@ private:
             << "\nNUMERICK STATUS\n"
             << "--------------------------------\n"
             << "Core:                Running\n"
-            << "AI model:            Qwen 3.5 4B\n"
+            << "AI model:            " << aiClient_.config().model << '\n'
+            << "Ollama endpoint:     http://" << aiClient_.config().endpoint() << '\n'
+            << "Response timeout:    " << aiClient_.config().responseTimeoutMs << " ms\n"
             << "AI runtime:          Local Ollama API\n"
             << "Registered tools:    "
             << registry_.definitions().size() << '\n'

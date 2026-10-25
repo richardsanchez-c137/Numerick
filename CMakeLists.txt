@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Numerick
-    VERSION 1.0.0
+    VERSION 1.1.0
     DESCRIPTION "A personal AI assistant"
     LANGUAGES CXX
 )
@@ -26,6 +26,7 @@ endfunction()
 add_executable(numerick
     src/main.cpp
     src/core/ai_client.cpp
+    src/core/ollama_config.cpp
     src/core/command_parser.cpp
     src/core/conversation_session.cpp
     src/core/persistent_memory.cpp
@@ -112,6 +113,15 @@ target_include_directories(project_file_tools_tests PRIVATE include)
 numerick_enable_warnings(project_file_tools_tests)
 add_test(NAME project_file_tools_tests COMMAND project_file_tools_tests)
 
+# Config parsing and health-response tests do not require a live Ollama service.
+add_executable(ollama_config_tests
+    tests/ollama_config_tests.cpp
+    src/core/ollama_config.cpp
+)
+target_include_directories(ollama_config_tests PRIVATE include)
+numerick_enable_warnings(ollama_config_tests)
+add_test(NAME ollama_config_tests COMMAND ollama_config_tests)
+
 # Prevent a hung test from blocking local verification or CI indefinitely.
 set_tests_properties(
     command_parser_tests
@@ -122,6 +132,7 @@ set_tests_properties(
     tool_agent_conversation_tests
     persistent_memory_tests
     project_file_tools_tests
+    ollama_config_tests
     PROPERTIES
         LABELS "automated"
         TIMEOUT 30

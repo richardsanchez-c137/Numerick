@@ -54,6 +54,10 @@ ParsedCommand parseCommand(const std::string& input) {
         return {CommandType::Status, ""};
     }
 
+    if (normalized == "doctor") {
+        return {CommandType::Doctor, ""};
+    }
+
     if (normalized == "time") {
         return {CommandType::Time, ""};
     }

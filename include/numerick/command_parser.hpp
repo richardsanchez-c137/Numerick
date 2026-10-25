@@ -8,6 +8,7 @@ enum class CommandType {
     Help,
     Greeting,
     Status,
+    Doctor,
     Time,
     Ask,
     Agent,

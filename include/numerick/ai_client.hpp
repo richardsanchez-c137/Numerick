@@ -1,7 +1,7 @@
-
 #pragma once
 
 #include "numerick/chat_client.hpp"
+#include "numerick/ollama_config.hpp"
 
 #include <string>
 
@@ -9,7 +9,10 @@ namespace numerick {
 
 class AIClient : public ChatClient {
 public:
-    explicit AIClient(std::string model = "qwen3.5:4b");
+    AIClient();
+    explicit AIClient(OllamaConfig config);
+    // Compatibility overload for callers that want to override only the model.
+    explicit AIClient(std::string model);
 
     std::string ask(const std::string& prompt) const;
 
@@ -19,8 +22,11 @@ public:
             nlohmann::json::array()
     ) const override;
 
+    const OllamaConfig& config() const noexcept;
+    OllamaHealthResult diagnose() const;
+
 private:
-    std::string model_;
+    OllamaConfig config_;
 };
 
 } // namespace numerick
