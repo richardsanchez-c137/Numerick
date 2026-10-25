@@ -3,9 +3,12 @@
 #include "numerick/chat_client.hpp"
 #include "numerick/tool_registry.hpp"
 
+#include <cctype>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace numerick {
 namespace {
@@ -47,6 +50,91 @@ std::string getMessageContent(const Json& message) {
     }
 
     return "";
+}
+
+bool isPromptIdentifierCharacter(unsigned char character) {
+    return std::isalnum(character) != 0 || character == '_';
+}
+
+bool promptContainsIdentifier(const std::string& prompt, const std::string& identifier) {
+    if (identifier.empty()) {
+        return false;
+    }
+
+    std::size_t position = prompt.find(identifier);
+    while (position != std::string::npos) {
+        const bool leftBoundary = position == 0 ||
+            !isPromptIdentifierCharacter(static_cast<unsigned char>(prompt[position - 1]));
+        const std::size_t after = position + identifier.size();
+        const bool rightBoundary = after >= prompt.size() ||
+            !isPromptIdentifierCharacter(static_cast<unsigned char>(prompt[after]));
+        if (leftBoundary && rightBoundary) {
+            return true;
+        }
+        position = prompt.find(identifier, position + 1);
+    }
+    return false;
+}
+
+std::string relationshipArgumentMismatch(
+    const Json& arguments,
+    const std::string& currentUserPrompt
+) {
+    const char* keys[] = {"class_a", "member_a", "class_b", "member_b"};
+    for (const char* key : keys) {
+        if (!arguments.contains(key) || !arguments[key].is_string()) {
+            // Let ToolRegistry's JSON-schema validation report missing/wrongly typed arguments.
+            return {};
+        }
+        const std::string value = arguments[key].get<std::string>();
+        if (!promptContainsIdentifier(currentUserPrompt, value)) {
+            return "Relationship lookup argument '" + std::string(key) + "'='" + value +
+                "' was not mentioned in the current user request. Use the exact class/member "
+                "identifiers from the user's question; do not substitute a test fixture or a "
+                "similarly named type.";
+        }
+    }
+    return {};
+}
+
+std::vector<std::pair<std::string, std::string>> extractClassMemberPairs(
+    const std::string& prompt
+) {
+    // Accept natural possessives (Numerick's registry_) and C++-style pairs
+    // (Numerick::registry_). Only bare identifier tokens are captured.
+    const std::regex pairPattern(
+        R"(([A-Za-z_][A-Za-z0-9_]*)\s*(?:'s|::)\s*([A-Za-z_][A-Za-z0-9_]*))"
+    );
+    std::vector<std::pair<std::string, std::string>> pairs;
+    for (std::sregex_iterator match(prompt.begin(), prompt.end(), pairPattern), end;
+         match != end; ++match) {
+        pairs.emplace_back((*match)[1].str(), (*match)[2].str());
+        if (pairs.size() >= 4) {
+            break;
+        }
+    }
+    return pairs;
+}
+
+bool requestsMemberRelationshipEvidence(const std::string& prompt) {
+    std::string lower = prompt;
+    for (char& character : lower) {
+        character = static_cast<char>(std::tolower(
+            static_cast<unsigned char>(character)
+        ));
+    }
+
+    const char* indicators[] = {
+        "relationship", "ownership", "reference", "by-value", "by value",
+        "separate object", "separate objects", "same object", "same instance",
+        "alias", "member refers", "object or reference"
+    };
+    for (const char* indicator : indicators) {
+        if (lower.find(indicator) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void captureTurnMessages(
@@ -141,6 +229,50 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
     const std::size_t initialMessageCount = messages.size();
 
     std::size_t processedCalls = 0;
+    std::string memberRelationshipFailure;
+
+    // Narrow, deterministic routing for explicit C++ member-relationship questions.
+    // This prevents the model from substituting a generic symbol search or unrelated test fixture.
+    const std::string currentPrompt = lastMessage["content"].get<std::string>();
+    const auto memberPairs = extractClassMemberPairs(currentPrompt);
+    if (registry_.contains("inspect_cpp_member_relationship") &&
+        memberPairs.size() >= 2 &&
+        requestsMemberRelationshipEvidence(currentPrompt)) {
+        const Json arguments = {
+            {"class_a", memberPairs[0].first},
+            {"member_a", memberPairs[0].second},
+            {"class_b", memberPairs[1].first},
+            {"member_b", memberPairs[1].second}
+        };
+        const ToolResult relationship = registry_.execute(
+            "inspect_cpp_member_relationship", arguments
+        );
+
+        report.toolCallsRequested = 1;
+        report.toolCalls.push_back({
+            "inspect_cpp_member_relationship",
+            relationship.success ? "succeeded" : "failed"
+        });
+        if (relationship.success) {
+            report.toolCallsSucceeded = 1;
+            report.answer = relationship.output;
+        }
+        else {
+            report.toolCallsFailed = 1;
+            report.answer =
+                "NUMERICK could not verify the requested C++ member relationship. " +
+                relationship.output;
+        }
+
+        // This targeted path doesn't ask the model to paraphrase source evidence.
+        // Keep the answer as a completed assistant turn in conversation history.
+        report.turnMessages = Json::array();
+        report.turnMessages.push_back({
+            {"role", "assistant"},
+            {"content", report.answer}
+        });
+        return report;
+    }
 
     while (true) {
         const Json response = aiClient_.chat(messages, tools);
@@ -168,7 +300,16 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
         }
 
         if (requestedCalls.empty()) {
-            report.answer = getMessageContent(message);
+            // If the specialist relationship tool failed, do not let a generic model answer
+            // substitute for evidence that was not obtained.
+            if (!memberRelationshipFailure.empty()) {
+                report.answer =
+                    "NUMERICK could not verify the requested C++ member relationship. " +
+                    memberRelationshipFailure;
+            }
+            else {
+                report.answer = getMessageContent(message);
+            }
 
             if (report.answer.empty()) {
                 report.answer =
@@ -276,10 +417,25 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
                     "Tool is not registered: " + toolName;
             }
             else {
-                result = registry_.execute(
-                    toolName,
-                    call["function"]["arguments"]
-                );
+                const Json& arguments = call["function"]["arguments"];
+                if (toolName == "inspect_cpp_member_relationship") {
+                    const std::string mismatch = relationshipArgumentMismatch(
+                        arguments,
+                        lastMessage["content"].get<std::string>()
+                    );
+                    if (!mismatch.empty()) {
+                        result = {false, mismatch};
+                    }
+                    else {
+                        result = registry_.execute(toolName, arguments);
+                    }
+                    if (!result.success) {
+                        memberRelationshipFailure = result.output;
+                    }
+                }
+                else {
+                    result = registry_.execute(toolName, arguments);
+                }
 
                 // Count a registry submission as processed even when
                 // schema validation or the handler rejects it.
@@ -305,6 +461,19 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
 
             report.toolCalls.push_back({toolName, outcome});
             ++processedCalls;
+
+            // This tool produces a bounded, evidence-bearing report intended to be the
+            // answer. Return it directly so the model cannot contradict the source evidence
+            // while paraphrasing it (for example, saying "separate objects" for a reference).
+            if (toolName == "inspect_cpp_member_relationship" && result.success) {
+                report.answer = result.output;
+                messages.push_back({
+                    {"role", "assistant"},
+                    {"content", report.answer}
+                });
+                captureTurnMessages(report, messages, initialMessageCount);
+                return report;
+            }
         }
     }
 }

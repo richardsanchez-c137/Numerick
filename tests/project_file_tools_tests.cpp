@@ -88,6 +88,62 @@ static void testDescribesWorkspaceArchitectureReadOnly() {
     assert(unexpectedArgument.output.find("Unexpected argument: path") != std::string::npos);
 }
 
+static void testInspectCppMemberRelationshipReportsValueAndReferenceEvidence() {
+    TemporaryWorkspace workspace;
+    writeText(workspace.root() / "include" / "numerick" / "owner.hpp",
+        "class Owner {\npublic:\n    Owner();\nprivate:\n    numerick::ToolRegistry registry_;\n    Agent toolAgent_;\n};\n");
+    writeText(workspace.root() / "include" / "agent.hpp",
+        "class Agent {\npublic:\n    explicit Agent(const numerick::ToolRegistry& registry);\nprivate:\n    const numerick::ToolRegistry& registry_;\n};\n");
+    writeText(workspace.root() / "src" / "owner.cpp", "Owner::Owner() : toolAgent_(registry_) {}\n");
+    writeText(workspace.root() / "src" / "agent.cpp",
+        "Agent::Agent(const numerick::ToolRegistry& registry) : registry_(registry) {}\n");
+
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+    const ToolResult result = call(registry, "inspect_cpp_member_relationship", {
+        {"class_a", "Owner"}, {"member_a", "registry_"},
+        {"class_b", "Agent"}, {"member_b", "registry_"}
+    });
+
+    assert(result.success);
+    assert(result.output.find("include/numerick/owner.hpp") != std::string::npos);
+    assert(result.output.find("by-value object member") != std::string::npos);
+    assert(result.output.find("include/agent.hpp") != std::string::npos);
+    assert(result.output.find("reference member") != std::string::npos);
+    assert(result.output.find("src/owner.cpp") != std::string::npos);
+    assert(result.output.find("src/agent.cpp") != std::string::npos);
+    assert(result.output.find("Evidence-based conclusion") != std::string::npos);
+}
+
+static void testInspectCppComponentGroupsEvidence() {
+    TemporaryWorkspace workspace;
+    writeText(workspace.root() / "include" / "numerick" / "widget.hpp",
+        "class Widget {\npublic:\n    void render();\n};\n");
+    writeText(workspace.root() / "src" / "widget.cpp",
+        "#include \"numerick/widget.hpp\"\nvoid Widget::render() {}\n");
+    writeText(workspace.root() / "src" / "usage.cpp",
+        "void invokeWidget(Widget& widget) { widget.render(); }\n");
+    writeText(workspace.root() / "tests" / "widget_tests.cpp",
+        "void testWidgetRender() {\n    Widget widget;\n    widget.render();\n}\n");
+
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+    const ToolResult result = call(
+        registry, "inspect_cpp_component", {{"symbol", "render"}}
+    );
+
+    assert(result.success);
+    assert(result.output.find("Header / interface candidates") != std::string::npos);
+    assert(result.output.find("Likely implementation candidates") != std::string::npos);
+    assert(result.output.find("Likely call sites") != std::string::npos);
+    assert(result.output.find("Related test references") != std::string::npos);
+    assert(result.output.find("include/numerick/widget.hpp:3:") != std::string::npos);
+    assert(result.output.find("src/widget.cpp:2:") != std::string::npos);
+    assert(result.output.find("src/usage.cpp:1:") != std::string::npos);
+    assert(result.output.find("tests/widget_tests.cpp:3:") != std::string::npos);
+    assert(result.output.find("not compiler-resolved") != std::string::npos);
+}
+
 static void testListsSafeProjectEntriesAndFiltersPrivateFolders() {
     TemporaryWorkspace workspace;
     writeText(workspace.root() / "README.md", "project readme\n");
@@ -260,6 +316,8 @@ static void testRegistersSearchAndSymbolTools() {
     assert(registry.contains("search_project_files"));
     assert(registry.contains("find_cpp_symbol"));
     assert(registry.contains("describe_project_architecture"));
+    assert(registry.contains("inspect_cpp_component"));
+    assert(registry.contains("inspect_cpp_member_relationship"));
     assert(!registry.contains("write_project_file"));
     assert(!registry.contains("run_shell_command"));
 }
@@ -319,6 +377,8 @@ int main() {
     testRegistersOnlyReadOnlyProjectTools();
     testRegistersSearchAndSymbolTools();
     testDescribesWorkspaceArchitectureReadOnly();
+    testInspectCppComponentGroupsEvidence();
+    testInspectCppMemberRelationshipReportsValueAndReferenceEvidence();
     testSearchProjectFilesReturnsPathAndLineMatches();
     testFindCppSymbolUsesWholeIdentifierBoundaries();
     testFindCppSymbolRejectsInvalidIdentifiers();

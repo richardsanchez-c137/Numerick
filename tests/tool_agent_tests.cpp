@@ -110,6 +110,36 @@ static void registerEchoTool(
     );
 }
 
+static void registerRelationshipEvidenceTool(
+    ToolRegistry& registry,
+    int* executionCount,
+    const std::string& evidence
+) {
+    registry.registerTool(
+        {
+            "inspect_cpp_member_relationship",
+            "Returns source evidence for a C++ member relationship.",
+            {
+                {"type", "object"},
+                {"properties", {
+                    {"class_a", {{"type", "string"}}},
+                    {"member_a", {{"type", "string"}}},
+                    {"class_b", {{"type", "string"}}},
+                    {"member_b", {{"type", "string"}}}
+                }},
+                {"required", {"class_a", "member_a", "class_b", "member_b"}},
+                {"additionalProperties", false}
+            }
+        },
+        [executionCount, evidence](const Json&) -> ToolResult {
+            if (executionCount != nullptr) {
+                ++(*executionCount);
+            }
+            return {true, evidence};
+        }
+    );
+}
+
 // 1. Successful tool execution and result handoff.
 static void testSuccessfulToolCycle() {
     ToolRegistry registry;
@@ -436,6 +466,134 @@ static void testEmptyPromptIsRejected() {
 }
 
 
+static void testRelationshipToolResultIsReturnedDirectlyAndRejectsWrongClass() {
+    ToolRegistry registry;
+    int executionCount = 0;
+    const std::string evidence =
+        "Conclusion: one ToolRegistry object and a reference to it, not two separate objects.\n"
+        "Evidence: Numerick::registry_ is a by-value member; ToolAgent::registry_ is "
+        "const ToolRegistry&; ToolAgent initializes registry_(registry).";
+    registerRelationshipEvidenceTool(registry, &executionCount, evidence);
+
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({makeToolCall(
+            "inspect_cpp_member_relationship",
+            {{"class_a", "Owner"}, {"member_a", "registry_"},
+             {"class_b", "ToolAgent"}, {"member_b", "registry_"}}
+        )})),
+        toolRequest(Json::array({makeToolCall(
+            "inspect_cpp_member_relationship",
+            {{"class_a", "Numerick"}, {"member_a", "registry_"},
+             {"class_b", "ToolAgent"}, {"member_b", "registry_"}}
+        )}))
+    });
+
+    ToolAgent agent(ai, registry);
+    const auto report = agent.runWithDiagnostics(
+        "Verify the ownership relationship for member registry_ between classes Numerick and ToolAgent; are these separate objects or an object and a reference?"
+    );
+
+    assert(report.answer == evidence);
+    assert(report.modelRequests == 2);
+    assert(report.toolRounds == 2);
+    assert(report.toolCallsRequested == 2);
+    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsSucceeded == 1);
+    assert(report.toolCalls.size() == 2);
+    assert(report.toolCalls[0].outcome == "failed");
+    assert(report.toolCalls[1].outcome == "succeeded");
+    assert(executionCount == 1);
+    assert(ai.seenMessages.size() == 2);
+    assert(ai.seenMessages[1].back()["role"] == "tool");
+    assert(ai.seenMessages[1].back()["content"].get<std::string>().find(
+        "Owner" ) != std::string::npos);
+    assert(report.turnMessages.back()["role"] == "assistant");
+    assert(report.turnMessages.back()["content"] == evidence);
+}
+
+static void testFailedRelationshipInspectionDoesNotPermitGenericGuess() {
+    ToolRegistry registry;
+    int executionCount = 0;
+    registerRelationshipEvidenceTool(
+        registry, &executionCount,
+        "Conclusion: source-backed relationship evidence."
+    );
+
+    FakeChatClient ai(std::vector<Json>{
+        toolRequest(Json::array({makeToolCall(
+            "inspect_cpp_member_relationship",
+            {{"class_a", "Owner"}, {"member_a", "registry_"},
+             {"class_b", "ToolAgent"}, {"member_b", "registry_"}}
+        )})),
+        finalAnswer("They are separate objects.")
+    });
+
+    ToolAgent agent(ai, registry);
+    const auto report = agent.runWithDiagnostics(
+        "Verify the ownership relationship for member registry_ between classes Numerick and ToolAgent; are these separate objects?"
+    );
+
+    assert(report.answer.find("could not verify") != std::string::npos);
+    assert(report.answer.find("They are separate objects") == std::string::npos);
+    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsSucceeded == 0);
+    assert(executionCount == 0);
+}
+
+static void testRelationshipPromptRoutesBeforeModel() {
+    ToolRegistry registry;
+    int executionCount = 0;
+    const std::string evidence =
+        "Conclusion: one ToolRegistry object and a reference to it, not two separate objects.\n"
+        "Evidence: Numerick::registry_ is by value; ToolAgent::registry_ is const ToolRegistry&; "
+        "ToolAgent initializes registry_(registry).";
+    registerRelationshipEvidenceTool(registry, &executionCount, evidence);
+
+    // If the deterministic router fails, this deliberately misleading generic answer
+    // would be returned by the model. The router must avoid calling the model entirely.
+    FakeChatClient ai(std::vector<Json>{
+        finalAnswer("They are separate objects.")
+    });
+    ToolAgent agent(ai, registry);
+    const auto report = agent.runWithDiagnostics(
+        "Verify whether Numerick's registry_ and ToolAgent's registry_ are separate objects or an object and reference."
+    );
+
+    assert(report.answer == evidence);
+    assert(report.modelRequests == 0);
+    assert(report.toolRounds == 0);
+    assert(report.toolCallsRequested == 1);
+    assert(report.toolCallsSucceeded == 1);
+    assert(report.toolCallsFailed == 0);
+    assert(report.toolCalls.size() == 1);
+    assert(report.toolCalls[0].name == "inspect_cpp_member_relationship");
+    assert(report.toolCalls[0].outcome == "succeeded");
+    assert(ai.seenMessages.empty());
+    assert(executionCount == 1);
+    assert(report.turnMessages.size() == 1);
+    assert(report.turnMessages[0]["content"] == evidence);
+}
+
+static void testNonRelationshipPromptDoesNotUseDeterministicRouter() {
+    ToolRegistry registry;
+    int executionCount = 0;
+    registerRelationshipEvidenceTool(
+        registry, &executionCount,
+        "relationship evidence should not be used for a general question"
+    );
+    FakeChatClient ai(std::vector<Json>{
+        finalAnswer("The general answer is returned by the model.")
+    });
+    ToolAgent agent(ai, registry);
+    const auto report = agent.runWithDiagnostics("What is a reference in C++?");
+
+    assert(report.answer == "The general answer is returned by the model.");
+    assert(report.modelRequests == 1);
+    assert(report.toolCallsRequested == 0);
+    assert(executionCount == 0);
+    assert(ai.seenMessages.size() == 1);
+}
+
 static void testDirectAnswerDoesNotInvokeTools() {
     ToolRegistry registry;
 
@@ -482,6 +640,10 @@ int main() {
     testRoundLimitPreventsExecution();
     testCallLimitPreventsExecution();
     testEmptyPromptIsRejected();
+    testRelationshipToolResultIsReturnedDirectlyAndRejectsWrongClass();
+    testFailedRelationshipInspectionDoesNotPermitGenericGuess();
+    testRelationshipPromptRoutesBeforeModel();
+    testNonRelationshipPromptDoesNotUseDeterministicRouter();
     testDirectAnswerDoesNotInvokeTools();
 
     std::cout << "All tool agent tests passed.\n";

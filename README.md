@@ -4,7 +4,7 @@
 
 NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
 
-## Current development status — 0.8.0
+## Current development status — 0.9.0
 
 Implemented:
 - C++17 command-line assistant
@@ -14,7 +14,7 @@ Implemented:
 - Read-only `get_local_time` tool
 - Explicit persistent facts stored locally in `data/memory.json`
 - `remember`, `memories`, and `forget` commands
-- Read-only workspace tools: `list_project_files`, `read_project_file`, `search_project_files`, and `find_cpp_symbol`
+- Read-only workspace tools: `list_project_files`, `read_project_file`, `search_project_files`, `find_cpp_symbol`, `describe_project_architecture`, `inspect_cpp_component`, and `inspect_cpp_member_relationship`
 - Automated tests through CMake and CTest
 
 ## Commands
@@ -55,7 +55,9 @@ The `agent` command can use these registered tools when a request requires proje
 - `read_project_file`: reads one allowlisted text file by workspace-relative path.
 - `search_project_files`: searches allowlisted workspace text files for a literal, case-insensitive query and returns path/line/snippet matches. Scans are bounded.
 - `find_cpp_symbol`: searches C/C++ source and header files for whole-identifier occurrences and reports line numbers. This is bounded text search, not a compiler-grade parser.
-- `describe_project_architecture`: builds a bounded, read-only inventory of the workspace root, headers, core source, tools, tests, and documentation. It reports filesystem structure rather than claiming to infer a complete call graph.
+- `describe_project_architecture`: builds a bounded, read-only inventory of workspace directories. It reports filesystem structure rather than a complete call graph.
+- `inspect_cpp_component`: groups bounded C++ identifier matches into header/interface candidates, likely implementations, likely call sites, related test references, and other source references. Categories are heuristics, not compiler-resolved relationships.
+- `inspect_cpp_member_relationship`: compares two named class members, reports source-backed value/reference/pointer syntax and likely initializer wiring, and clearly identifies incomplete evidence. It is heuristic, not a compiler or lifetime analyzer.
 
 The default workspace root is the process's current working directory. Start NUMERICK from the repository root to give it access to that project. To select a different root, set `NUMERICK_WORKSPACE_ROOT` before launching the application:
 
@@ -66,7 +68,7 @@ $env:NUMERICK_WORKSPACE_ROOT = "D:\GitHub\Projects\SomeOtherProject"
 
 The tools are read-only: there are no file-writing, deletion, process-execution, or arbitrary shell tools. They reject absolute paths and `..` traversal, verify resolved paths stay under the canonical workspace root, filter private directories such as `.git`, `build`, `data`, and `logs`, block common secret filenames and key/database/binary extensions, allowlist text file types, cap reads at 256 KiB, and cap returned content at 12 KiB. Files returned by these tools are marked as untrusted data in their tool response and the agent system prompt instructs the model not to follow instructions inside files.
 
-Search and symbol lookup reuse the same workspace path checks, blocked-directory rules, filename/extension filters, UTF-8 checks, and file-size limits as the read-only file tools. Search is bounded and may not visit every file in a very large workspace.
+Search, symbol lookup, architecture inventory, component inspection, and member-relationship checks are bounded and read-only. Component inspection reuses the existing C++ identifier search and groups results with path/snippet heuristics; it does not resolve overloads, templates, aliases, or semantic call graphs, and bounded search may omit matches in very large workspaces.
 
 Agent runs also print a compact diagnostic summary with model-request counts, tool-round counts, and per-tool outcomes. Rejected or failed calls are reported separately from successful calls.
 

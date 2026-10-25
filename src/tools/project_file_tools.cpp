@@ -657,6 +657,419 @@ std::string searchWorkspace(
     return output.str();
 }
 
+std::string inspectCppComponent(
+    const fs::path& canonicalRoot,
+    const std::string& rawSymbol
+) {
+    const std::string symbol = trim(rawSymbol);
+    if (!isValidCppIdentifier(symbol)) {
+        throw std::invalid_argument(
+            "Symbol must be a valid C++ identifier (letters, digits, underscores; "
+            "not starting with a digit)."
+        );
+    }
+
+    // Reuse the same canonical-root, blocked-path, file-type, UTF-8, and scan
+    // limits as find_cpp_symbol. Classifications below are text heuristics only.
+    const std::string rawReport = searchWorkspace(
+        canonicalRoot, symbol, true, true, false
+    );
+
+    struct Evidence {
+        std::string path;
+        std::string lineNumber;
+        std::string snippet;
+    };
+    std::vector<Evidence> interfaces;
+    std::vector<Evidence> implementations;
+    std::vector<Evidence> callSites;
+    std::vector<Evidence> tests;
+    std::vector<Evidence> references;
+    std::vector<std::string> notes;
+
+    auto isTestPath = [](const std::string& path) {
+        const std::string lower = lowerAscii(path);
+        return lower.rfind("tests/", 0) == 0 ||
+            lower.find("/tests/") != std::string::npos ||
+            lower.find("_test.") != std::string::npos ||
+            lower.find("_tests.") != std::string::npos ||
+            lower.find("test_") != std::string::npos;
+    };
+
+    std::istringstream input(rawReport);
+    std::string line;
+    bool skippedHeader = false;
+    while (std::getline(input, line)) {
+        if (!skippedHeader) {
+            skippedHeader = true;
+            continue;
+        }
+
+        // Search results use the workspace-relative form path:line: snippet.
+        // Non-result lines carry important bounded-scan and truncation notices.
+        const std::size_t firstColon = line.find(':');
+        const std::size_t secondColon = firstColon == std::string::npos
+            ? std::string::npos : line.find(':', firstColon + 1);
+        bool parsed = firstColon != std::string::npos &&
+            secondColon != std::string::npos && firstColon > 0;
+        if (parsed) {
+            const std::string lineNumber =
+                line.substr(firstColon + 1, secondColon - firstColon - 1);
+            parsed = !lineNumber.empty();
+            for (unsigned char character : lineNumber) {
+                if (!std::isdigit(character)) {
+                    parsed = false;
+                    break;
+                }
+            }
+            if (parsed) {
+                Evidence evidence;
+                evidence.path = line.substr(0, firstColon);
+                evidence.lineNumber = lineNumber;
+                evidence.snippet = trim(line.substr(secondColon + 1));
+
+                if (isTestPath(evidence.path)) {
+                    tests.push_back(std::move(evidence));
+                }
+                else {
+                    const std::string extension =
+                        lowerAscii(fs::path(evidence.path).extension().string());
+                    static const std::set<std::string> headerExtensions = {
+                        ".h", ".hpp", ".hxx", ".hh", ".ipp", ".inl"
+                    };
+                    if (headerExtensions.find(extension) != headerExtensions.end()) {
+                        interfaces.push_back(std::move(evidence));
+                    }
+                    else if (evidence.snippet.find(symbol + "::") != std::string::npos ||
+                             evidence.snippet.find("::" + symbol) != std::string::npos) {
+                        implementations.push_back(std::move(evidence));
+                    }
+                    else if (evidence.snippet.find(symbol + "(") != std::string::npos ||
+                             evidence.snippet.find(symbol + " (") != std::string::npos) {
+                        callSites.push_back(std::move(evidence));
+                    }
+                    else {
+                        references.push_back(std::move(evidence));
+                    }
+                }
+                continue;
+            }
+        }
+
+        if (!line.empty()) {
+            notes.push_back(line);
+        }
+    }
+
+    std::ostringstream output;
+    output << "Component evidence for C++ identifier '" << symbol << "'\n"
+           << "Scope: bounded, read-only search of allowlisted C/C++ files within the workspace.\n"
+           << "Classification is heuristic: results are text matches, not compiler-resolved relationships.\n";
+
+    auto emitSection = [&output](const char* title, const std::vector<Evidence>& items) {
+        output << "\n== " << title << " (" << items.size() << ") ==\n";
+        if (items.empty()) {
+            output << "(No matches classified in this category.)\n";
+            return;
+        }
+        for (const Evidence& item : items) {
+            output << item.path << ':' << item.lineNumber << ": "
+                   << item.snippet << '\n';
+        }
+    };
+
+    emitSection("Header / interface candidates", interfaces);
+    emitSection("Likely implementation candidates", implementations);
+    emitSection("Likely call sites", callSites);
+    emitSection("Related test references", tests);
+    emitSection("Other source references", references);
+
+    if (notes.empty() && interfaces.empty() && implementations.empty() &&
+        callSites.empty() && tests.empty() && references.empty()) {
+        output << "\n(No matching occurrences found in the accessible files scanned.)\n";
+    }
+    if (!notes.empty()) {
+        output << "\n== Search limits / notes ==\n";
+        for (const std::string& note : notes) {
+            output << note << '\n';
+        }
+    }
+    output << "\nUse read_project_file to inspect surrounding context. Overloads, templates, "
+              "macros, aliases, and semantic call relationships are not resolved.";
+
+    const std::string report = output.str();
+    constexpr std::size_t maxComponentReportBytes = 10 * 1024;
+    if (report.size() > maxComponentReportBytes) {
+        return safeTruncateUtf8(report, maxComponentReportBytes) +
+            "\n[NUMERICK: Component report truncated; inspect a narrower component or file.]";
+    }
+    return report;
+}
+
+struct RelationshipMatch {
+    std::string path;
+    std::size_t line = 0;
+    std::string snippet;
+};
+
+std::vector<RelationshipMatch> parseIdentifierMatches(const std::string& report) {
+    std::vector<RelationshipMatch> result;
+    std::istringstream input(report);
+    std::string line;
+    bool skippedHeading = false;
+    while (std::getline(input, line)) {
+        if (!skippedHeading) {
+            skippedHeading = true;
+            continue;
+        }
+        const std::size_t first = line.find(':');
+        const std::size_t second = first == std::string::npos
+            ? std::string::npos : line.find(':', first + 1);
+        if (first == std::string::npos || second == std::string::npos || first == 0) continue;
+        const std::string number = line.substr(first + 1, second - first - 1);
+        if (number.empty() || !std::all_of(number.begin(), number.end(), [](unsigned char c) {
+                return std::isdigit(c) != 0;
+            })) continue;
+        try {
+            result.push_back({line.substr(0, first),
+                static_cast<std::size_t>(std::stoull(number)), trim(line.substr(second + 1))});
+        }
+        catch (...) {
+            // Ignore malformed/non-result lines in the bounded search report.
+        }
+    }
+    return result;
+}
+
+struct MemberDeclarationEvidence {
+    bool found = false;
+    std::string path;
+    std::size_t line = 0;
+    std::string snippet;
+    std::string typeText;
+};
+
+int braceDeltaForCodeLine(const std::string& line, bool& inBlockComment) {
+    int delta = 0;
+    bool inString = false;
+    bool inCharacter = false;
+    bool escaped = false;
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        const char c = line[i];
+        const char next = i + 1 < line.size() ? line[i + 1] : '\0';
+        if (inBlockComment) {
+            if (c == '*' && next == '/') { inBlockComment = false; ++i; }
+            continue;
+        }
+        if (inString || inCharacter) {
+            if (escaped) escaped = false;
+            else if (c == '\\') escaped = true;
+            else if ((inString && c == '"') || (inCharacter && c == '\'')) {
+                inString = false;
+                inCharacter = false;
+            }
+            continue;
+        }
+        if (c == '/' && next == '/') break;
+        if (c == '/' && next == '*') { inBlockComment = true; ++i; continue; }
+        if (c == '"') { inString = true; continue; }
+        if (c == '\'') { inCharacter = true; continue; }
+        if (c == '{') ++delta;
+        else if (c == '}') --delta;
+    }
+    return delta;
+}
+
+bool hasWordAt(const std::string& text, std::size_t position, const std::string& word) {
+    if (position + word.size() > text.size() || text.compare(position, word.size(), word) != 0) return false;
+    if (position > 0 && isIdentifierCharacter(static_cast<unsigned char>(text[position - 1]))) return false;
+    const std::size_t after = position + word.size();
+    return after >= text.size() || !isIdentifierCharacter(static_cast<unsigned char>(text[after]));
+}
+
+std::string normalizedMemberType(std::string typeText) {
+    auto eraseAll = [&typeText](const std::string& token) {
+        std::size_t position = typeText.find(token);
+        while (position != std::string::npos) {
+            typeText.erase(position, token.size());
+            position = typeText.find(token);
+        }
+    };
+    eraseAll("const");
+    eraseAll("volatile");
+    eraseAll("&");
+    eraseAll("*");
+    typeText = trim(typeText);
+    const std::size_t namespacePosition = typeText.rfind("::");
+    if (namespacePosition != std::string::npos) typeText = typeText.substr(namespacePosition + 2);
+    return trim(typeText);
+}
+
+MemberDeclarationEvidence findCppMemberDeclaration(
+    const fs::path& canonicalRoot,
+    const std::string& className,
+    const std::string& memberName
+) {
+    MemberDeclarationEvidence evidence;
+    const auto classMatches = parseIdentifierMatches(searchWorkspace(
+        canonicalRoot, className, true, true, false));
+    std::set<std::string> candidatePaths;
+    for (const auto& match : classMatches) candidatePaths.insert(match.path);
+
+    for (const std::string& relativePath : candidatePaths) {
+        fs::path file;
+        try { file = resolveExistingPath(canonicalRoot, relativePath, false); }
+        catch (const std::exception&) { continue; }
+        if (!isCppSourceFile(file) || !isReadableTextFile(file)) continue;
+        const std::string contents = readSearchableFile(file);
+        if (contents.empty()) continue;
+
+        std::istringstream input(contents);
+        std::vector<std::pair<std::size_t, std::string>> sourceLines;
+        std::string line;
+        std::size_t lineNumber = 0;
+        while (std::getline(input, line)) sourceLines.emplace_back(++lineNumber, line);
+
+        for (std::size_t classLine = 0; classLine < sourceLines.size(); ++classLine) {
+            const std::string& declarationLine = sourceLines[classLine].second;
+            const std::size_t classPos = declarationLine.find("class ");
+            const std::size_t structPos = declarationLine.find("struct ");
+            std::size_t keywordPos = classPos;
+            std::size_t nameStart = std::string::npos;
+            if (keywordPos == std::string::npos ||
+                (structPos != std::string::npos && structPos < keywordPos)) keywordPos = structPos;
+            if (keywordPos == std::string::npos) continue;
+            nameStart = declarationLine.find(' ', keywordPos) + 1;
+            if (nameStart == 0 || !hasWordAt(declarationLine, nameStart, className)) continue;
+
+            std::size_t openLine = classLine;
+            std::size_t openColumn = declarationLine.find('{', nameStart + className.size());
+            if (openColumn == std::string::npos) {
+                bool foundOpen = false;
+                for (std::size_t j = classLine + 1; j < sourceLines.size() && j <= classLine + 8; ++j) {
+                    const std::string& candidate = sourceLines[j].second;
+                    if (candidate.find(';') != std::string::npos) break;
+                    const std::size_t brace = candidate.find('{');
+                    if (brace != std::string::npos) { openLine = j; openColumn = brace; foundOpen = true; break; }
+                }
+                if (!foundOpen) continue;
+            }
+            const std::size_t semicolon = declarationLine.find(';', nameStart + className.size());
+            if (openLine == classLine && semicolon != std::string::npos && semicolon < openColumn) continue;
+
+            int depth = 0;
+            bool inBlockComment = false;
+            bool bodyEnded = false;
+            for (std::size_t j = openLine; j < sourceLines.size(); ++j) {
+                const std::string& bodyLine = sourceLines[j].second;
+                const std::size_t scanBegin = j == openLine ? openColumn : 0;
+                if (j != openLine && depth == 1 && containsCppIdentifier(bodyLine, memberName) &&
+                    bodyLine.find(';') != std::string::npos) {
+                    const std::size_t memberPosition = bodyLine.find(memberName);
+                    const std::size_t earlierParen = bodyLine.find('(');
+                    if (earlierParen == std::string::npos || earlierParen > memberPosition) {
+                        const std::string prefix = trim(bodyLine.substr(0, memberPosition));
+                        if (!prefix.empty() && prefix.find("return") == std::string::npos &&
+                            prefix.find("//") == std::string::npos) {
+                            evidence = {true, file.lexically_relative(canonicalRoot).generic_string(),
+                                sourceLines[j].first, trim(bodyLine), prefix};
+                            break;
+                        }
+                    }
+                }
+                const std::string scanText = bodyLine.substr(scanBegin);
+                depth += braceDeltaForCodeLine(scanText, inBlockComment);
+                if (j == openLine && depth <= 0) continue;
+                if (j > openLine && depth <= 0) { bodyEnded = true; }
+                if (evidence.found || bodyEnded) break;
+            }
+            if (evidence.found) return evidence;
+        }
+    }
+    return evidence;
+}
+
+std::string inspectCppMemberRelationship(
+    const fs::path& canonicalRoot,
+    const std::string& rawClassA,
+    const std::string& rawMemberA,
+    const std::string& rawClassB,
+    const std::string& rawMemberB
+) {
+    const std::string classA = trim(rawClassA), memberA = trim(rawMemberA);
+    const std::string classB = trim(rawClassB), memberB = trim(rawMemberB);
+    if (!isValidCppIdentifier(classA) || !isValidCppIdentifier(memberA) ||
+        !isValidCppIdentifier(classB) || !isValidCppIdentifier(memberB)) {
+        throw std::invalid_argument("Class and member values must be bare C++ identifiers; do not include namespace qualifiers or '::'.");
+    }
+
+    const MemberDeclarationEvidence a = findCppMemberDeclaration(canonicalRoot, classA, memberA);
+    const MemberDeclarationEvidence b = findCppMemberDeclaration(canonicalRoot, classB, memberB);
+    const auto matchesA = parseIdentifierMatches(searchWorkspace(canonicalRoot, memberA, true, true, false));
+    const auto matchesB = parseIdentifierMatches(searchWorkspace(canonicalRoot, memberB, true, true, false));
+
+    std::ostringstream output;
+    output << "C++ member relationship evidence (bounded text analysis, not compiler semantic analysis)\n";
+    auto emitDeclaration = [&output](const char* title, const std::string& className,
+                                     const std::string& memberName,
+                                     const MemberDeclarationEvidence& evidence) {
+        output << "\n== " << title << " " << className << "::" << memberName << " ==\n";
+        if (!evidence.found) {
+            output << "No direct member declaration was confidently located for this class/member pair.\n";
+            return;
+        }
+        output << evidence.path << ':' << evidence.line << ": " << evidence.snippet << "\n"
+               << "Syntax classification: "
+               << (evidence.typeText.find('&') != std::string::npos ? "reference member" :
+                   evidence.typeText.find('*') != std::string::npos ? "pointer member" : "by-value object member")
+               << "\nDeclared type text: " << evidence.typeText << "\n";
+    };
+    emitDeclaration("First declaration:", classA, memberA, a);
+    emitDeclaration("Second declaration:", classB, memberB, b);
+
+    output << "\n== Relevant initializer and usage evidence ==\n";
+    std::size_t emitted = 0;
+    if (a.found) {
+        for (const auto& match : matchesA) {
+            const std::size_t memberPosition = match.snippet.find(memberA);
+            const std::size_t parenPosition = match.snippet.find('(');
+            if (match.line != a.line && memberPosition != std::string::npos &&
+                parenPosition != std::string::npos && parenPosition < memberPosition) {
+                output << "Usage candidate: " << match.path << ':' << match.line << ": " << match.snippet << '\n';
+                if (++emitted == 6) break;
+            }
+        }
+    }
+    emitted = 0;
+    for (const auto& match : matchesB) {
+        const std::size_t initPosition = match.snippet.find(memberB + "(");
+        if (initPosition != std::string::npos && (initPosition == 0 || match.snippet[initPosition - 1] != '.')) {
+            output << "Member-initializer candidate: " << match.path << ':' << match.line << ": " << match.snippet << '\n';
+            if (++emitted == 6) break;
+        }
+    }
+
+    const bool aRef = a.found && a.typeText.find('&') != std::string::npos;
+    const bool bRef = b.found && b.typeText.find('&') != std::string::npos;
+    const bool sameType = a.found && b.found && normalizedMemberType(a.typeText) == normalizedMemberType(b.typeText);
+    output << "\n== Evidence-based conclusion ==\n";
+    if (a.found && b.found && !aRef && bRef && sameType) {
+        output << classA << "::" << memberA << " is a by-value member; " << classB << "::" << memberB
+               << " is a reference member to the same normalized type. These are not two separately declared by-value objects.\n";
+        output << "If the usage candidate shows the first member passed to the component constructor and the initializer candidate shows the second member bound to its constructor parameter, the evidence is consistent with the reference referring to the first object. This report is heuristic, not compiler/lifetime analysis.\n";
+    }
+    else if (a.found && b.found) {
+        output << "Compare the declarations and initializer evidence above; no compiler-resolved alias or lifetime analysis was performed.\n";
+    }
+    else {
+        output << "Insufficient source evidence for a reliable relationship conclusion. Refine the identifiers or inspect the listed files.\n";
+    }
+    output << "Only accessible, allowlisted C/C++ files in the configured workspace were searched.\n";
+    const std::string report = output.str();
+    constexpr std::size_t maxReportBytes = 8 * 1024;
+    return report.size() <= maxReportBytes ? report : safeTruncateUtf8(report, maxReportBytes) + "\n[NUMERICK: Report truncated.]";
+}
+
 std::string describeProjectArchitecture(const fs::path& canonicalRoot) {
     struct Section {
         const char* path;
@@ -865,6 +1278,64 @@ void registerProjectFileTools(
             }
         }
     );
+    registry.registerTool(
+        {
+            "inspect_cpp_member_relationship",
+            "Compares two C++ class-member declarations and returns bounded source evidence for value/reference/pointer syntax and likely constructor/member-initializer wiring. This is heuristic text analysis, not compiler semantic analysis.",
+            {
+                {"type", "object"},
+                {"properties", {
+                    {"class_a", {{"type", "string"}}},
+                    {"member_a", {{"type", "string"}}},
+                    {"class_b", {{"type", "string"}}},
+                    {"member_b", {{"type", "string"}}}
+                }},
+                {"required", {"class_a", "member_a", "class_b", "member_b"}},
+                {"additionalProperties", false}
+            }
+        },
+        [canonicalRoot](const Json& arguments) -> ToolResult {
+            try {
+                return {true, inspectCppMemberRelationship(
+                    canonicalRoot,
+                    requireStringArgument(arguments, "class_a"),
+                    requireStringArgument(arguments, "member_a"),
+                    requireStringArgument(arguments, "class_b"),
+                    requireStringArgument(arguments, "member_b")
+                )};
+            }
+            catch (const std::exception& exception) {
+                return {false, exception.what()};
+            }
+        }
+    );
+
+    registry.registerTool(
+        {
+            "inspect_cpp_component",
+            "Builds a bounded, read-only evidence report for a C++ identifier, grouping occurrences into header/interface candidates, likely implementations, likely call sites, related tests, and other source references. Classification is heuristic, not compiler-resolved.",
+            {
+                {"type", "object"},
+                {"properties", {
+                    {"symbol", {{"type", "string"}}}
+                }},
+                {"required", {"symbol"}},
+                {"additionalProperties", false}
+            }
+        },
+        [canonicalRoot](const Json& arguments) -> ToolResult {
+            try {
+                return {true, inspectCppComponent(
+                    canonicalRoot,
+                    requireStringArgument(arguments, "symbol")
+                )};
+            }
+            catch (const std::exception& exception) {
+                return {false, exception.what()};
+            }
+        }
+    );
+
     registry.registerTool(
         {
             "describe_project_architecture",
