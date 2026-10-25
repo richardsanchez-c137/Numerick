@@ -911,3 +911,22 @@ The tool returned its result, and Qwen generated the final natural-language answ
 #### Next objective
 
 Continue hardening the live agent workflow and test additional failure cases before introducing tools that access files, repositories or applications.
+
+## 2026-10-25 — Direct-Answer Regression Test and Agent Verification
+
+**Version:** 0.4.0
+
+### Changes
+- Added an automated regression test confirming that a direct model response does not execute registered tools.
+- Verified that the direct-answer path reports one model request, zero tool rounds, and zero tool calls.
+- Verified that tool-call diagnostics correctly track successful execution and completed agent workflows.
+
+### Verification
+- All four CTest suites passed.
+- Live Ollama verification: a general knowledge question completed in one model request without invoking a tool.
+- Live Ollama verification: a current-time question invoked `get_local_time`, returned the result to the model, and completed in two model requests.
+- Both live checks reported zero tool failures and zero rejected tool calls.
+
+### Notes
+- Automated tests use a fake ChatClient to verify agent behavior deterministically.
+- The Ollama checks are manual end-to-end verification, not automated integration tests.

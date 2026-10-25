@@ -283,3 +283,5 @@ The tool agent also produces diagnostic reports containing model-request counts,
 Automated tests cover successful tool execution, unknown tools, malformed requests, schema-validation failures, handler failures, empty prompts, and execution limits.
 
 The local Qwen integration has successfully completed an initial end-to-end `get_local_time` tool call. This is an initial integration test, not proof that every tool interaction is reliable.
+
+- **Agent diagnostics:** Tracks model requests, tool rounds, tool-call outcomes, and stop reasons. The agent can answer directly without invoking unnecessary tools.

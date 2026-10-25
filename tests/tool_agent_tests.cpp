@@ -435,6 +435,43 @@ static void testEmptyPromptIsRejected() {
     assert(ai.seenMessages.empty());
 }
 
+
+static void testDirectAnswerDoesNotInvokeTools() {
+    ToolRegistry registry;
+
+    int executionCount = 0;
+    registerEchoTool(registry, &executionCount);
+
+    FakeChatClient ai(std::vector<Json>{
+        finalAnswer("An API lets software applications communicate.")
+    });
+
+    ToolAgent agent(ai, registry);
+
+    const auto report = agent.runWithDiagnostics(
+        "Explain an API in one sentence."
+    );
+
+    assert(
+        report.answer ==
+        "An API lets software applications communicate."
+    );
+
+    // A direct answer should require only one model request.
+    assert(report.modelRequests == 1);
+    assert(report.toolRounds == 0);
+    assert(report.toolCallsRequested == 0);
+
+    assert(report.toolCallsSucceeded == 0);
+    assert(report.toolCallsFailed == 0);
+    assert(report.toolCallsRejected == 0);
+    assert(report.toolCalls.empty());
+
+    // The registered tool must not execute unless requested.
+    assert(executionCount == 0);
+}
+
+
 int main() {
     testSuccessfulToolCycle();
     testUnknownToolIsRejected();
@@ -445,6 +482,7 @@ int main() {
     testRoundLimitPreventsExecution();
     testCallLimitPreventsExecution();
     testEmptyPromptIsRejected();
+    testDirectAnswerDoesNotInvokeTools();
 
     std::cout << "All tool agent tests passed.\n";
     return 0;
