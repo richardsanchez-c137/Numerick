@@ -1,0 +1,35 @@
+NUMERICK v0.6.0 — Project File Tools Patch
+
+1) Extract this ZIP at the root of your NUMERICK repository. It contains new files under include/, src/, and tests/, plus an updated README.md.
+2) From PowerShell, with the current directory set to D:\GitHub\Projects\Numerick, run:
+
+   python _patch_support\apply_project_file_tools_patch.py
+
+   The script patches the existing main.cpp and CMakeLists.txt in-place and updates the AIClient User-Agent version. It refuses to continue if the expected 0.5.0 source patterns don't match exactly.
+3) Build and test:
+
+   cmake -S . -B build
+   cmake --build build --clean-first
+   ctest --test-dir build --output-on-failure
+
+   Expected test suites: 8 (the previous 7 plus project_file_tools_tests).
+4) Manual live test from the repository root:
+
+   .\build\numerick.exe
+   agent List the files at the workspace root.
+   agent Read README.md and summarize the project principles.
+   agent Try to read ../outside.txt and explain whether access is allowed.
+   status
+
+   The first two requests should use the corresponding file tool. The traversal attempt should be rejected. Check the `Agent diagnostics` and `Agent tool outcome` entries in data/activity.log; do not rely only on the model's explanation.
+5) Append _patch_support\documentation_addendum.md to documentation.md only after filling in the actual build/test/live verification results.
+6) Inspect git status. Do not commit `_patch_support/`; delete it after use. `data/` is ignored and must remain untracked.
+
+Access policy:
+- The root defaults to the current working directory. Start NUMERICK from the intended workspace root.
+- To select a different workspace before launch:
+
+   $env:NUMERICK_WORKSPACE_ROOT = "D:\GitHub\Projects\SomeOtherProject"
+   .\build\numerick.exe
+
+- The tools are read-only and support only allowlisted text extensions. Private folders and common secret/binary files are intentionally blocked. This is defense-in-depth, not a complete security sandbox.
