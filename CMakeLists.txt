@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Numerick
-    VERSION 0.5.0
+    VERSION 0.6.0
     DESCRIPTION "A personal AI assistant"
     LANGUAGES CXX
 )
@@ -29,6 +29,7 @@ add_executable(numerick
     src/core/command_parser.cpp
     src/core/conversation_session.cpp
     src/core/persistent_memory.cpp
+    src/tools/project_file_tools.cpp
     src/core/tool_agent.cpp
     src/tools/tool_registry.cpp
     src/tools/builtin_tools.cpp
@@ -100,3 +101,13 @@ add_executable(persistent_memory_tests
 target_include_directories(persistent_memory_tests PRIVATE include)
 numerick_enable_warnings(persistent_memory_tests)
 add_test(NAME persistent_memory_tests COMMAND persistent_memory_tests)
+
+# Project file tools test their workspace boundaries and read-only behavior.
+add_executable(project_file_tools_tests
+    tests/project_file_tools_tests.cpp
+    src/tools/project_file_tools.cpp
+    src/tools/tool_registry.cpp
+)
+target_include_directories(project_file_tools_tests PRIVATE include)
+numerick_enable_warnings(project_file_tools_tests)
+add_test(NAME project_file_tools_tests COMMAND project_file_tools_tests)

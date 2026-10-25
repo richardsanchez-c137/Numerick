@@ -81,7 +81,7 @@ Json AIClient::chat(
 
     WinHttpHandle session{
         WinHttpOpen(
-            L"NUMERICK/0.5.0",
+            L"NUMERICK/0.6.0",
             WINHTTP_ACCESS_TYPE_NO_PROXY,
             WINHTTP_NO_PROXY_NAME,
             WINHTTP_NO_PROXY_BYPASS,
