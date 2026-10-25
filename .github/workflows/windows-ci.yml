@@ -1,0 +1,48 @@
+name: Windows UCRT64 CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Configure, build, and test (UCRT64)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      # Keep source files LF-normalized for the MSYS2 toolchain.
+      - name: Configure Git line endings
+        shell: pwsh
+        run: git config --global core.autocrlf input
+
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-nlohmann-json
+
+      - name: Configure fresh build
+        run: cmake -S . -B build -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Run automated tests
+        run: ctest --test-dir build --output-on-failure --no-tests=error

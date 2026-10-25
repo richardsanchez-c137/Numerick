@@ -4,7 +4,7 @@
 
 NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
 
-## Current development status — 0.9.0
+## Current development status — 1.0.0
 
 Implemented:
 - C++17 command-line assistant
@@ -96,6 +96,24 @@ Run NUMERICK:
 ```powershell
 .\build\numerick.exe
 ```
+
+## Release verification
+
+NUMERICK includes a repeatable PowerShell release check and a Windows UCRT64 GitHub Actions workflow. The workflow configures a fresh checkout, builds the application, and runs all CTest suites without requiring a live Ollama service.
+
+From the repository root, run the local release check in a dedicated build folder:
+
+```powershell
+.\scripts\verify-release.ps1 -Clean
+```
+
+To select a specific CMake generator, pass it explicitly; for example:
+
+```powershell
+.\scripts\verify-release.ps1 -Clean -Generator "MinGW Makefiles"
+```
+
+The script removes only the selected in-repository build directory when `-Clean` is specified. It configures, builds, and runs CTest with `--no-tests=error`, so a missing test registration cannot be mistaken for a passing test run. The live Ollama experience remains a separate manual smoke test.
 
 ## Current limitations
 

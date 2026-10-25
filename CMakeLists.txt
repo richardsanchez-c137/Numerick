@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Numerick
-    VERSION 0.9.0
+    VERSION 1.0.0
     DESCRIPTION "A personal AI assistant"
     LANGUAGES CXX
 )
@@ -111,3 +111,18 @@ add_executable(project_file_tools_tests
 target_include_directories(project_file_tools_tests PRIVATE include)
 numerick_enable_warnings(project_file_tools_tests)
 add_test(NAME project_file_tools_tests COMMAND project_file_tools_tests)
+
+# Prevent a hung test from blocking local verification or CI indefinitely.
+set_tests_properties(
+    command_parser_tests
+    tool_registry_tests
+    builtin_tools_tests
+    tool_agent_tests
+    conversation_session_tests
+    tool_agent_conversation_tests
+    persistent_memory_tests
+    project_file_tools_tests
+    PROPERTIES
+        LABELS "automated"
+        TIMEOUT 30
+)

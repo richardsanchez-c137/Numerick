@@ -228,7 +228,7 @@ private:
             << "          N U M E R I C K\n"
             << "       Personal Assistant Core\n"
             << "====================================\n"
-            << "Core version: 0.9.0\n"
+            << "Core version: 1.0.0\n"
             << "AI model: Qwen 3.5 4B via Ollama\n"
             << "Registered tools: "
             << registry_.definitions().size() << '\n'
