@@ -228,7 +228,7 @@ private:
             << "          N U M E R I C K\n"
             << "       Personal Assistant Core\n"
             << "====================================\n"
-            << "Core version: 1.1.0\n"
+            << "Core version: 1.2.0\n"
             << "AI model: " << aiClient_.config().model << '\n'
             << "Ollama endpoint: http://" << aiClient_.config().endpoint() << '\n'
             << "Registered tools: "

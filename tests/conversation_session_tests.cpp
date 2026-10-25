@@ -208,6 +208,17 @@ static void testClearRemovesConversationHistory() {
     assert(messages[1]["content"] == "New topic");
 }
 
+static void testRejectsBlankAssistantAnswerWithoutRecordingTurn() {
+    ConversationSession session;
+    expectInvalidArgument([&session] {
+        session.recordTurn(
+            "Question",
+            Json::array({{{"role", "assistant"}, {"content", " \t\r\n"}}})
+        );
+    });
+    assert(session.turnCount() == 0);
+}
+
 int main() {
     testBuildsSystemAndCurrentUserMessages();
     testFollowUpIncludesPreviousTurn();
@@ -215,6 +226,7 @@ int main() {
     testToolTranscriptRemainsIntactAcrossTurns();
     testRejectsIncompleteTranscriptAndBlankPrompts();
     testClearRemovesConversationHistory();
+    testRejectsBlankAssistantAnswerWithoutRecordingTurn();
 
     std::cout << "All conversation session tests passed.\n";
     return 0;

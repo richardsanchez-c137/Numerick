@@ -7,6 +7,7 @@
 
 #include "numerick/ai_client.hpp"
 #include "numerick/ollama_config.hpp"
+#include "numerick/ollama_response.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -32,10 +33,26 @@ struct WinHttpHandle {
     WinHttpHandle& operator=(const WinHttpHandle&) = delete;
 };
 
-std::runtime_error winHttpError(const std::string& stage) {
-    return std::runtime_error(
-        stage + " failed. Windows error: " +
-        std::to_string(GetLastError())
+numerick::OllamaRequestError winHttpError(const std::string& stage) {
+    const DWORD errorCode = GetLastError();
+    numerick::OllamaFailureKind kind = numerick::OllamaFailureKind::Transport;
+    std::string prefix = "Ollama HTTP transport failed";
+
+    if (errorCode == ERROR_WINHTTP_TIMEOUT) {
+        kind = numerick::OllamaFailureKind::Timeout;
+        prefix = "Ollama request timed out";
+    }
+    else if (errorCode == ERROR_WINHTTP_CANNOT_CONNECT ||
+             errorCode == ERROR_WINHTTP_NAME_NOT_RESOLVED ||
+             errorCode == ERROR_WINHTTP_CONNECTION_ERROR) {
+        kind = numerick::OllamaFailureKind::Connection;
+        prefix = "Could not connect to Ollama";
+    }
+
+    return numerick::OllamaRequestError(
+        kind,
+        prefix + " while " + stage + ". Windows error: " +
+            std::to_string(errorCode)
     );
 }
 
@@ -52,9 +69,16 @@ HttpResponse performOllamaRequest(
 ) {
     const std::wstring wideHost(config.host.begin(), config.host.end());
 
+    if (payload.size() > numerick::kMaxOllamaPayloadBytes) {
+        throw numerick::OllamaRequestError(
+            numerick::OllamaFailureKind::RequestTooLarge,
+            "Ollama request exceeded the 4 MiB safety limit."
+        );
+    }
+
     WinHttpHandle session{
         WinHttpOpen(
-            L"NUMERICK/1.1.0",
+            L"NUMERICK/1.2.0",
             WINHTTP_ACCESS_TYPE_NO_PROXY,
             WINHTTP_NO_PROXY_NAME,
             WINHTTP_NO_PROXY_BYPASS,
@@ -138,7 +162,6 @@ HttpResponse performOllamaRequest(
     HttpResponse response;
     response.statusCode = statusCode;
 
-    constexpr std::size_t kMaxResponseBytes = 4U * 1024U * 1024U;
     while (true) {
         DWORD available = 0;
         if (!WinHttpQueryDataAvailable(request.value, &available)) {
@@ -148,9 +171,11 @@ HttpResponse performOllamaRequest(
             break;
         }
 
-        if (response.body.size() + static_cast<std::size_t>(available) >
-            kMaxResponseBytes) {
-            throw std::runtime_error(
+        if (response.body.size() > numerick::kMaxOllamaPayloadBytes ||
+            static_cast<std::size_t>(available) >
+                numerick::kMaxOllamaPayloadBytes - response.body.size()) {
+            throw numerick::OllamaRequestError(
+                numerick::OllamaFailureKind::ResponseTooLarge,
                 "Ollama response exceeded the 4 MiB safety limit."
             );
         }
@@ -165,7 +190,15 @@ HttpResponse performOllamaRequest(
             )) {
             throw winHttpError("Reading response data");
         }
-        response.body.append(buffer.data(), downloaded);
+        if (downloaded == 0) {
+            throw numerick::OllamaRequestError(
+                numerick::OllamaFailureKind::Transport,
+                "Reading the Ollama response made no progress."
+            );
+        }
+        numerick::appendOllamaResponseChunk(
+            response.body, std::string_view(buffer.data(), downloaded)
+        );
     }
 
     return response;
@@ -204,6 +237,49 @@ OllamaHealthResult AIClient::diagnose() const {
         return evaluateOllamaTagsResponse(
             response.statusCode, response.body, config_.model
         );
+    }
+    catch (const OllamaRequestError& error) {
+        std::string message;
+        switch (error.kind()) {
+        case OllamaFailureKind::Connection:
+            message = "Ollama is unreachable at http://" + config_.endpoint() +
+                ". Start Ollama and verify the configured host and port.";
+            break;
+        case OllamaFailureKind::Timeout:
+            message = "Ollama did not respond before the configured timeout.";
+            break;
+        case OllamaFailureKind::ModelNotFound:
+            message = "The configured Ollama model is missing. Run `ollama pull " +
+                config_.model + "`.";
+            break;
+        case OllamaFailureKind::HttpStatus:
+            message = "Ollama returned HTTP status " +
+                std::to_string(error.statusCode()) + " while checking its API.";
+            break;
+        case OllamaFailureKind::MalformedJson:
+            message = "Ollama returned malformed JSON while checking its API.";
+            break;
+        case OllamaFailureKind::InvalidResponse:
+            message = "Ollama returned an unexpected API response.";
+            break;
+        case OllamaFailureKind::ResponseTooLarge:
+            message = "Ollama's response exceeded the configured safety limit.";
+            break;
+        case OllamaFailureKind::RequestTooLarge:
+            message = "The request exceeded the configured safety limit.";
+            break;
+        case OllamaFailureKind::Transport:
+            message = "Communication with Ollama failed.";
+            break;
+        }
+        return {false, false, false, message + " Details: " + error.what()};
+    }
+    catch (const Json::parse_error& error) {
+        return {
+            false, false, false,
+            "Ollama responded, but /api/tags returned malformed JSON. Details: " +
+                std::string(error.what())
+        };
     }
     catch (const std::exception& error) {
         return {
@@ -251,23 +327,9 @@ Json AIClient::chat(
         config_, L"POST", L"/api/chat", requestBody.dump()
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw std::runtime_error(
-            "Ollama returned HTTP status " +
-            std::to_string(response.statusCode) + "."
-        );
-    }
-
-    const Json parsed = Json::parse(response.body);
-    if (!parsed.is_object() ||
-        !parsed.contains("message") ||
-        !parsed["message"].is_object()) {
-        throw std::runtime_error(
-            "Ollama returned an unexpected response format."
-        );
-    }
-
-    return parsed;
+    return parseOllamaChatResponse(
+        response.statusCode, response.body, !tools.empty()
+    );
 }
 
 std::string AIClient::ask(const std::string& prompt) const {

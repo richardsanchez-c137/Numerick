@@ -203,6 +203,21 @@ static void testRejectsInvalidConversationShape() {
     assert(ai.seenMessages.empty());
 }
 
+static void testEmptyAssistantResponseThrowsInsteadOfReturningSuccess() {
+    ToolRegistry registry;
+    ScriptedChatClient ai({finalAnswer(" \t\r\n")});
+    ToolAgent agent(ai, registry);
+
+    bool failed = false;
+    try {
+        (void)agent.runWithConversationDiagnostics(initialConversation());
+    }
+    catch (const std::runtime_error&) {
+        failed = true;
+    }
+    assert(failed);
+}
+
 int main() {
     std::cout << "Running direct-answer test..." << std::endl;
     testDirectAnswerTranscript();
@@ -215,6 +230,7 @@ int main() {
 
     std::cout << "Running invalid-conversation test..." << std::endl;
     testRejectsInvalidConversationShape();
+    testEmptyAssistantResponseThrowsInsteadOfReturningSuccess();
 
     std::cout << "All tool-agent conversation tests passed.\n";
     return 0;

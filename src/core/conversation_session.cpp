@@ -115,6 +115,11 @@ void ConversationSession::recordTurn(
             "A completed turn must end with an assistant text response."
         );
     }
+    if (isBlank(finalMessage["content"].get<std::string>())) {
+        throw std::invalid_argument(
+            "A completed turn must end with a non-empty assistant text response."
+        );
+    }
 
     Json turn = Json::array({
         {

@@ -311,9 +311,11 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
                 report.answer = getMessageContent(message);
             }
 
-            if (report.answer.empty()) {
-                report.answer =
-                    "NUMERICK received an empty final response.";
+            if (report.answer.find_first_not_of(" \t\r\n") == std::string::npos) {
+                throw std::runtime_error(
+                    "Ollama returned an empty assistant response. "
+                    "The conversation turn was not committed."
+                );
             }
 
             Json finalMessage = message;

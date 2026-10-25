@@ -4,7 +4,7 @@
 
 NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
 
-## Current development status — 1.1.0
+## Current development status — 1.2.0
 
 Implemented:
 - C++17 command-line assistant
