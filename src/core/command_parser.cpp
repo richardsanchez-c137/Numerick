@@ -1,4 +1,3 @@
-
 #include "numerick/command_parser.hpp"
 
 #include <algorithm>
@@ -10,13 +9,11 @@ namespace {
 
 std::string trim(const std::string& input) {
     const auto first = input.find_first_not_of(" \t\r\n");
-
     if (first == std::string::npos) {
         return "";
     }
 
     const auto last = input.find_last_not_of(" \t\r\n");
-
     return input.substr(first, last - first + 1);
 }
 
@@ -74,10 +71,7 @@ ParsedCommand parseCommand(const std::string& input) {
     }
 
     if (normalized.rfind("ask ", 0) == 0) {
-        return {
-            CommandType::Ask,
-            trim(cleaned.substr(4))
-        };
+        return {CommandType::Ask, trim(cleaned.substr(4))};
     }
 
     if (normalized == "agent") {
@@ -85,11 +79,28 @@ ParsedCommand parseCommand(const std::string& input) {
     }
 
     if (normalized.rfind("agent ", 0) == 0) {
-        return {
-            CommandType::Agent,
-            trim(cleaned.substr(6))
-        };
-    }   
+        return {CommandType::Agent, trim(cleaned.substr(6))};
+    }
+
+    if (normalized == "remember") {
+        return {CommandType::Remember, ""};
+    }
+
+    if (normalized.rfind("remember ", 0) == 0) {
+        return {CommandType::Remember, trim(cleaned.substr(9))};
+    }
+
+    if (normalized == "memory" || normalized == "memories") {
+        return {CommandType::Memories, ""};
+    }
+
+    if (normalized == "forget") {
+        return {CommandType::Forget, ""};
+    }
+
+    if (normalized.rfind("forget ", 0) == 0) {
+        return {CommandType::Forget, trim(cleaned.substr(7))};
+    }
 
     return {CommandType::Unknown, cleaned};
 }

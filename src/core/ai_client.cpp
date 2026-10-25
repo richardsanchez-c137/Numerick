@@ -1,4 +1,3 @@
-
 #define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
@@ -82,7 +81,7 @@ Json AIClient::chat(
 
     WinHttpHandle session{
         WinHttpOpen(
-            L"NUMERICK/0.4.0",
+            L"NUMERICK/0.5.0",
             WINHTTP_ACCESS_TYPE_NO_PROXY,
             WINHTTP_NO_PROXY_NAME,
             WINHTTP_NO_PROXY_BYPASS,

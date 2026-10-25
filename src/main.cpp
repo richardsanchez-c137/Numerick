@@ -2,9 +2,11 @@
 #include "numerick/builtin_tools.hpp"
 #include "numerick/command_parser.hpp"
 #include "numerick/conversation_session.hpp"
+#include "numerick/persistent_memory.hpp"
 #include "numerick/tool_agent.hpp"
 #include "numerick/tool_registry.hpp"
 
+#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -14,6 +16,7 @@
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 namespace fs = std::filesystem;
 using Json = nlohmann::json;
@@ -36,6 +39,24 @@ constexpr const char* kAgentSystemPrompt =
     "explain that failure honestly. Use only the tools "
     "provided with this request.";
 
+bool parseMemoryId(const std::string& text, std::size_t& id) {
+    if (text.empty()) {
+        return false;
+    }
+
+    std::size_t parsedId = 0;
+    const char* first = text.data();
+    const char* last = first + text.size();
+    const auto result = std::from_chars(first, last, parsedId);
+
+    if (result.ec != std::errc{} || result.ptr != last || parsedId == 0) {
+        return false;
+    }
+
+    id = parsedId;
+    return true;
+}
+
 } // namespace
 
 class Numerick {
@@ -43,7 +64,8 @@ public:
     Numerick()
         : aiClient_(),
           toolAgent_(aiClient_, registry_),
-          conversation_(10) {
+          conversation_(10),
+          persistentMemory_("data/memory.json", 50, 500) {
         fs::create_directories("data");
         logFile_.open("data/activity.log", std::ios::app);
 
@@ -65,7 +87,6 @@ public:
         printWelcome();
 
         std::string input;
-
         while (true) {
             std::cout << "\nYou > ";
 
@@ -81,7 +102,7 @@ public:
                 continue;
             }
 
-            // Do not record the user's entire AI prompt in the activity log.
+            // Never put saved fact text into activity.log.
             if (command.type == numerick::CommandType::Ask ||
                 command.type == numerick::CommandType::Agent) {
                 log(
@@ -89,7 +110,14 @@ public:
                         ? "Agent request submitted"
                         : "AI request submitted"
                 );
-            } else {
+            }
+            else if (command.type == numerick::CommandType::Remember) {
+                log("Persistent memory save requested");
+            }
+            else if (command.type == numerick::CommandType::Forget) {
+                log("Persistent memory deletion requested");
+            }
+            else {
                 log("Input received: " + input);
             }
 
@@ -104,6 +132,7 @@ private:
     numerick::AIClient aiClient_;
     numerick::ToolAgent toolAgent_;
     numerick::ConversationSession conversation_;
+    numerick::PersistentMemory persistentMemory_;
     std::ofstream logFile_;
 
     static const char* stopReasonName(
@@ -112,10 +141,8 @@ private:
         switch (reason) {
         case numerick::AgentStopReason::Completed:
             return "completed";
-
         case numerick::AgentStopReason::ToolRoundLimitReached:
             return "tool_round_limit";
-
         case numerick::AgentStopReason::ToolCallLimitReached:
             return "tool_call_limit";
         }
@@ -129,7 +156,6 @@ private:
             std::chrono::system_clock::to_time_t(now);
 
         std::tm local{};
-
 #ifdef _WIN32
         localtime_s(&local, &time);
 #else
@@ -137,14 +163,12 @@ private:
 #endif
 
         char buffer[32]{};
-
         std::strftime(
             buffer,
             sizeof(buffer),
             "%Y-%m-%d %H:%M:%S",
             &local
         );
-
         return buffer;
     }
 
@@ -156,6 +180,18 @@ private:
         }
     }
 
+    std::string systemPromptWithMemory(const char* basePrompt) const {
+        std::string result = basePrompt;
+        const std::string memoryContext =
+            persistentMemory_.formatForPrompt(20, 4000);
+
+        if (!memoryContext.empty()) {
+            result += "\n\n";
+            result += memoryContext;
+        }
+        return result;
+    }
+
     void printWelcome() const {
         std::cout
             << "\n"
@@ -163,13 +199,17 @@ private:
             << "          N U M E R I C K\n"
             << "       Personal Assistant Core\n"
             << "====================================\n"
-            << "Core version: 0.4.0\n"
+            << "Core version: 0.5.0\n"
             << "AI model: Qwen 3.5 4B via Ollama\n"
             << "Registered tools: "
             << registry_.definitions().size() << '\n'
             << "Conversation history: last "
             << conversation_.maxTurns()
             << " completed turns in memory\n"
+            << "Persistent memories: "
+            << persistentMemory_.size() << '/'
+            << persistentMemory_.maxEntries()
+            << " saved locally\n"
             << "Type 'help' to see available commands.\n";
     }
 
@@ -191,7 +231,6 @@ private:
             break;
 
         case CommandType::Time:
-            // Preserve the existing direct time command.
             std::cout
                 << "NUMERICK > Local time: "
                 << currentTime() << '\n';
@@ -203,7 +242,7 @@ private:
 #else
             std::system("clear");
 #endif
-            // Clearing the terminal does not clear the conversation.
+            // Clearing the terminal does not clear session or saved memory.
             printWelcome();
             break;
 
@@ -215,13 +254,11 @@ private:
             }
 
             std::cout << "NUMERICK > Thinking...\n";
-
             try {
                 const Json messages = conversation_.buildMessages(
                     command.argument,
-                    kAskSystemPrompt
+                    systemPromptWithMemory(kAskSystemPrompt)
                 );
-
                 const Json response = aiClient_.chat(messages);
 
                 if (!response.is_object() ||
@@ -238,22 +275,18 @@ private:
                 const std::string answer =
                     assistantMessage["content"].get<std::string>();
 
-                // Save the actual model message; do not include the UI-only
-                // truncation warning in the conversational transcript.
                 conversation_.recordTurn(
                     command.argument,
                     Json::array({assistantMessage})
                 );
 
                 std::cout << "\nNUMERICK > " << answer;
-
                 if (response.value(
                         "done_reason", std::string{}) == "length") {
                     std::cout
                         << "\n\n[NUMERICK: The response may be incomplete "
                         << "because the output limit was reached.]";
                 }
-
                 std::cout << '\n';
                 log("AI response received");
             }
@@ -262,11 +295,7 @@ private:
                     << "\nNUMERICK > I couldn't get a response "
                     << "from the local AI model.\n"
                     << "Details: " << error.what() << '\n';
-
-                log(
-                    "AI request failed: " +
-                    std::string(error.what())
-                );
+                log("AI request failed: " + std::string(error.what()));
             }
             break;
 
@@ -278,18 +307,15 @@ private:
             }
 
             std::cout << "NUMERICK > Working on it...\n";
-
             try {
                 const Json messages = conversation_.buildMessages(
                     command.argument,
-                    kAgentSystemPrompt
+                    systemPromptWithMemory(kAgentSystemPrompt)
                 );
 
                 const numerick::AgentRunReport report =
                     toolAgent_.runWithConversationDiagnostics(messages);
 
-                // The report includes assistant tool-call messages, tool
-                // results, and the final answer for this completed turn.
                 conversation_.recordTurn(
                     command.argument,
                     report.turnMessages
@@ -326,13 +352,85 @@ private:
                 std::cout
                     << "\nNUMERICK > The agent request failed.\n"
                     << "Details: " << error.what() << '\n';
-
-                log(
-                    "Agent request failed: " +
-                    std::string(error.what())
-                );
+                log("Agent request failed: " + std::string(error.what()));
             }
             break;
+
+        case CommandType::Remember:
+            if (command.argument.empty()) {
+                std::cout
+                    << "NUMERICK > Usage: remember <fact to save>\n";
+                break;
+            }
+            try {
+                const std::size_t id =
+                    persistentMemory_.remember(command.argument);
+                std::cout
+                    << "NUMERICK > Persistent memory saved or already present as #"
+                    << id << ".\n";
+                log("Persistent memory saved or already present: id=" +
+                    std::to_string(id));
+            }
+            catch (const std::exception& error) {
+                std::cout
+                    << "NUMERICK > I couldn't save that memory.\n"
+                    << "Details: " << error.what() << '\n';
+                log("Persistent memory save failed: " +
+                    std::string(error.what()));
+            }
+            break;
+
+        case CommandType::Memories: {
+            const auto entries = persistentMemory_.entries();
+            if (entries.empty()) {
+                std::cout
+                    << "NUMERICK > No persistent memories saved yet. "
+                    << "Use 'remember <fact>' to save one.\n";
+                break;
+            }
+
+            std::cout << "\nNUMERICK SAVED MEMORIES ("
+                      << entries.size() << '/'
+                      << persistentMemory_.maxEntries() << ")\n";
+            for (const auto& entry : entries) {
+                std::cout << "  #" << entry.id << ": "
+                          << entry.text << '\n';
+            }
+            break;
+        }
+
+        case CommandType::Forget: {
+            std::size_t id = 0;
+            if (!parseMemoryId(command.argument, id)) {
+                std::cout
+                    << "NUMERICK > Usage: forget <memory ID>\n"
+                    << "Use 'memories' to see saved memory IDs.\n";
+                break;
+            }
+
+            try {
+                if (persistentMemory_.forget(id)) {
+                    std::cout
+                        << "NUMERICK > Deleted persistent memory #"
+                        << id << ".\n";
+                    log("Persistent memory deleted: id=" +
+                        std::to_string(id));
+                }
+                else {
+                    std::cout
+                        << "NUMERICK > No saved memory has ID #"
+                        << id << ".\n";
+                }
+            }
+            catch (const std::exception& error) {
+                std::cout
+                    << "NUMERICK > I couldn't delete that memory.\n"
+                    << "Details: " << error.what() << '\n';
+                log("Persistent memory deletion failed: " +
+                    std::string(error.what()));
+            }
+            break;
+        }
 
         case CommandType::Exit:
             std::cout
@@ -344,7 +442,6 @@ private:
                 << "NUMERICK > I don't recognize that command. "
                 << "Try 'help', 'ask <question>', or "
                 << "'agent <request>'.\n";
-
             log("Unsupported command: " + command.argument);
             break;
         }
@@ -355,33 +452,38 @@ private:
     void showHelp() const {
         std::cout
             << "\nAvailable commands:\n"
-            << "  help              - Show available commands\n"
-            << "  hello             - Test the assistant\n"
-            << "  status            - Show current status\n"
-            << "  time              - Display local time\n"
-            << "  ask <question>    - Ask the AI with conversation context\n"
-            << "  agent <request>   - Let AI request registered tools\n"
-            << "  clear             - Clear the console (history remains)\n"
-            << "  exit              - Shut down NUMERICK\n"
-            << "\n";
+            << "  help                 - Show available commands\n"
+            << "  hello                - Test the assistant\n"
+            << "  status               - Show current status\n"
+            << "  time                 - Display local time\n"
+            << "  ask <question>       - Ask AI with conversation context\n"
+            << "  agent <request>      - Let AI request registered tools\n"
+            << "  remember <fact>      - Explicitly save a persistent fact\n"
+            << "  memories             - List saved persistent facts\n"
+            << "  forget <memory ID>   - Delete one saved fact\n"
+            << "  clear                - Clear the console; memory remains\n"
+            << "  exit                 - Shut down NUMERICK\n"
+            << "\nPersistent facts are saved locally until you delete them.\n";
     }
 
     void showStatus() const {
         std::cout
             << "\nNUMERICK STATUS\n"
             << "--------------------------------\n"
-            << "Core:          Running\n"
-            << "AI model:      Qwen 3.5 4B\n"
-            << "AI runtime:    Local Ollama API\n"
-            << "Registered tools: "
+            << "Core:                Running\n"
+            << "AI model:            Qwen 3.5 4B\n"
+            << "AI runtime:          Local Ollama API\n"
+            << "Registered tools:    "
             << registry_.definitions().size() << '\n'
             << "Conversation history: "
             << conversation_.turnCount() << '/'
             << conversation_.maxTurns() << " turns\n"
-            << "Voice input:   Not implemented\n"
-            << "Vision:        Not implemented\n"
-            << "Persistent memory: Not implemented\n"
-            << "System access: No arbitrary commands\n"
+            << "Persistent memory:   "
+            << persistentMemory_.size() << '/'
+            << persistentMemory_.maxEntries() << " saved facts\n"
+            << "Voice input:         Not implemented\n"
+            << "Vision:              Not implemented\n"
+            << "System access:       No arbitrary commands\n"
             << "--------------------------------\n";
     }
 };
@@ -395,7 +497,6 @@ int main() {
         std::cerr
             << "NUMERICK error: "
             << error.what() << '\n';
-
         return 1;
     }
 

@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <string>
@@ -12,6 +11,9 @@ enum class CommandType {
     Time,
     Ask,
     Agent,
+    Remember,
+    Memories,
+    Forget,
     Clear,
     Exit,
     Unknown

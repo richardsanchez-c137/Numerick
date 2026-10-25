@@ -962,3 +962,54 @@ Continue hardening the live agent workflow and test additional failure cases bef
 - Conversation history is held in RAM and is lost when the application exits.
 - The history limit is bounded by turns; it is not a token-based context budget.
 - Live testing covered the scenarios listed above, not every possible conversation or tool sequence.
+
+## 2026-10-25 — Persistent Explicit Memory
+
+**Version:** 0.5.0
+
+### Design
+- Added a separate `PersistentMemory` module; it does not replace the ten-turn in-memory `ConversationSession`.
+- Persistent facts are only added through the explicit `remember <fact>` command.
+- Added `memories` to list stored facts and IDs, and `forget <ID>` to delete an individual fact.
+- Stored records in `data/memory.json`, which is excluded from version control by the existing `data/` ignore rule.
+- Limited the store to 50 entries and each fact to 500 bytes of text.
+- Added only the newest 20 saved facts, capped at 4,000 bytes, to `ask` and `agent` system prompts.
+- Serialized memory context as JSON and instructed the model to treat saved values as data rather than instructions.
+- Avoided logging full fact text to `data/activity.log`.
+- Updated the application version to 0.5.0 and added a persistent-memory test target.
+
+### Verification
+Record the actual results after testing the local Windows build:
+- Clean CMake build: [record result]
+- CTest: [record actual number of suites passed]
+- Live save/restart/recall/delete/restart check: [record result]
+
+### Limitations
+- Persistent memory is not encrypted; the JSON file is local plaintext.
+- Facts are saved explicitly, not inferred or saved automatically by the model.
+- The model only receives bounded memory context; this is a character limit, not a token-aware budget.
+- Memory context can influence responses but does not guarantee correct recall for every prompt.
+
+## 2026-10-25 — Persistent Explicit Memory
+
+**Version:** 0.5.0
+
+### Changes
+- Added persistent local memory, separate from temporary conversation history.
+- Added `remember <fact>` to save facts explicitly.
+- Added `memories` to list saved facts and their IDs.
+- Added `forget <ID>` to delete individual facts.
+- Persisted memories in `data/memory.json`.
+- Added bounded memory context to AI prompts.
+- Kept persistent memory separate from the activity log.
+
+### Verification
+- Live test: A saved fact survived application exit and restart.
+- Live test: NUMERICK recalled the saved fictional project ID `MINT-482`.
+- Deletion across restarts: Pending verification.
+- Automated tests: Record the actual CTest results here.
+
+### Limitations
+- Saved memory is local plaintext and is not encrypted.
+- Facts are saved explicitly rather than automatically.
+- Memory context is bounded; recall is not guaranteed for every question.
