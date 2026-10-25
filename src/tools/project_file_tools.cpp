@@ -657,6 +657,48 @@ std::string searchWorkspace(
     return output.str();
 }
 
+std::string describeProjectArchitecture(const fs::path& canonicalRoot) {
+    struct Section {
+        const char* path;
+        const char* label;
+    };
+
+    const Section sections[] = {
+        {".", "Workspace root"},
+        {"include/numerick", "Public interfaces"},
+        {"src/core", "Core implementation"},
+        {"src/tools", "Tool implementations"},
+        {"tests", "Automated tests"},
+        {"docs", "Supplementary documentation"}
+    };
+
+    std::ostringstream output;
+    output << "Workspace architecture overview (read-only filesystem inventory)\n"
+           << "Root: " << canonicalRoot.generic_string() << "\n"
+           << "This overview is based on accessible directory entries, not a complete call-graph analysis.\n";
+
+    for (const Section& section : sections) {
+        output << "\n== " << section.label << " [" << section.path << "] ==\n";
+        try {
+            output << listDirectory(canonicalRoot, section.path) << '\n';
+        }
+        catch (const std::exception&) {
+            output << "(No accessible entries found for this section.)\n";
+        }
+    }
+
+    output << "\nNext steps: use search_project_files for literal text, find_cpp_symbol for bounded C/C++ identifier lookup, and read_project_file for an allowed source file.\n";
+
+    const std::string report = output.str();
+    constexpr std::size_t maxArchitectureBytes = 10 * 1024;
+    if (report.size() > maxArchitectureBytes) {
+        return safeTruncateUtf8(report, maxArchitectureBytes) +
+            "\n[NUMERICK: Architecture overview truncated; inspect a specific directory for more detail.]";
+    }
+    return report;
+}
+
+
 } // namespace
 
 fs::path configuredWorkspaceRoot() {
@@ -823,6 +865,31 @@ void registerProjectFileTools(
             }
         }
     );
+    registry.registerTool(
+        {
+            "describe_project_architecture",
+            "Creates a bounded, read-only overview of accessible workspace entries in the root, headers, core source, tool implementations, tests, and documentation. It inventories filesystem structure and does not claim to infer a full call graph.",
+            {
+                {"type", "object"},
+                {"properties", Json::object()},
+                {"additionalProperties", false}
+            }
+        },
+        [canonicalRoot](const Json& arguments) -> ToolResult {
+            try {
+                if (!arguments.is_object() || !arguments.empty()) {
+                    throw std::invalid_argument(
+                        "describe_project_architecture accepts no arguments."
+                    );
+                }
+                return {true, describeProjectArchitecture(canonicalRoot)};
+            }
+            catch (const std::exception& exception) {
+                return {false, exception.what()};
+            }
+        }
+    );
+
 }
 
 } // namespace numerick

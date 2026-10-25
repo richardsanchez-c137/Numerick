@@ -4,7 +4,7 @@
 
 NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
 
-## Current development status — 0.7.0
+## Current development status — 0.8.0
 
 Implemented:
 - C++17 command-line assistant
@@ -55,6 +55,7 @@ The `agent` command can use these registered tools when a request requires proje
 - `read_project_file`: reads one allowlisted text file by workspace-relative path.
 - `search_project_files`: searches allowlisted workspace text files for a literal, case-insensitive query and returns path/line/snippet matches. Scans are bounded.
 - `find_cpp_symbol`: searches C/C++ source and header files for whole-identifier occurrences and reports line numbers. This is bounded text search, not a compiler-grade parser.
+- `describe_project_architecture`: builds a bounded, read-only inventory of the workspace root, headers, core source, tools, tests, and documentation. It reports filesystem structure rather than claiming to infer a complete call graph.
 
 The default workspace root is the process's current working directory. Start NUMERICK from the repository root to give it access to that project. To select a different root, set `NUMERICK_WORKSPACE_ROOT` before launching the application:
 
@@ -66,6 +67,8 @@ $env:NUMERICK_WORKSPACE_ROOT = "D:\GitHub\Projects\SomeOtherProject"
 The tools are read-only: there are no file-writing, deletion, process-execution, or arbitrary shell tools. They reject absolute paths and `..` traversal, verify resolved paths stay under the canonical workspace root, filter private directories such as `.git`, `build`, `data`, and `logs`, block common secret filenames and key/database/binary extensions, allowlist text file types, cap reads at 256 KiB, and cap returned content at 12 KiB. Files returned by these tools are marked as untrusted data in their tool response and the agent system prompt instructs the model not to follow instructions inside files.
 
 Search and symbol lookup reuse the same workspace path checks, blocked-directory rules, filename/extension filters, UTF-8 checks, and file-size limits as the read-only file tools. Search is bounded and may not visit every file in a very large workspace.
+
+Agent runs also print a compact diagnostic summary with model-request counts, tool-round counts, and per-tool outcomes. Rejected or failed calls are reported separately from successful calls.
 
 These filters reduce accidental exposure but are not a complete operating-system sandbox. Run NUMERICK as a normal user account, and choose the workspace root deliberately. Do not point it at your entire home directory or a folder containing unrelated private files.
 

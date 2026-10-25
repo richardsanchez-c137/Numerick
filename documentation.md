@@ -1,15 +1,15 @@
 # NUMERICK — Project Documentation
 
 **Project name:** NUMERICK  
-**Current version:** 0.7.0  
-**Project stage:** Local AI assistant core with bounded memory and read-only codebase tools  
+**Current version:** 0.8.0
+**Project stage:** Local AI assistant core with bounded memory, read-only codebase tools, architecture inventory, and agent diagnostics
 **Primary language:** C++  
 **Platform:** Windows  
 **Build system:** CMake; C++17; MSYS2 UCRT64 G++ development setup  
 **Documentation status:** Living document — update as the project evolves
 
 
-> **Current implementation snapshot — v0.7.0 (October 2026):** The sections below began as the v0.1.0 project plan; some early descriptions are historical. Current code includes a C++17 command-line assistant, local Ollama chat integration, `ask`/`agent`, bounded session history, explicit persistent facts, a validated tool registry, tool orchestration limits, local-time lookup, and four workspace-scoped read-only tools: `list_project_files`, `read_project_file`, `search_project_files`, and `find_cpp_symbol`. The workspace tools filter private/build folders and sensitive or non-text files, reject paths outside the configured root, and bound returned output. Automated tests are configured through CMake/CTest; verify the current local result with `ctest --test-dir build --output-on-failure` rather than assuming it passed.
+> **Current implementation snapshot — v0.7.0 (October 2026):** The sections below began as the v0.1.0 project plan; some early descriptions are historical. Current code includes a C++17 command-line assistant, local Ollama chat integration, `ask`/`agent`, bounded session history, explicit persistent facts, a validated tool registry, tool orchestration limits, local-time lookup, and five workspace-scoped read-only tools: `list_project_files`, `read_project_file`, `search_project_files`, `find_cpp_symbol`, and `describe_project_architecture`. Agent runs also print model/tool counts and per-tool outcomes for easier troubleshooting. The workspace tools filter private/build folders and sensitive or non-text files, reject paths outside the configured root, and bound returned output. Automated tests are configured through CMake/CTest; verify the current local result with `ctest --test-dir build --output-on-failure` rather than assuming it passed.
 
 
 ---

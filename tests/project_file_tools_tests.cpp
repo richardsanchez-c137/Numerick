@@ -60,6 +60,34 @@ static void testRegistersOnlyReadOnlyProjectTools() {
     assert(!registry.contains("delete_project_file"));
 }
 
+static void testDescribesWorkspaceArchitectureReadOnly() {
+    TemporaryWorkspace workspace;
+    writeText(workspace.root() / "src" / "core" / "sample.cpp", "int sample() { return 1; }\n");
+    writeText(workspace.root() / "include" / "numerick" / "sample.hpp", "#pragma once\n");
+    writeText(workspace.root() / "tests" / "sample_tests.cpp", "int main() { return 0; }\n");
+    writeText(workspace.root() / "build" / "ignored.txt", "generated content\n");
+
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+    const ToolResult result = call(
+        registry, "describe_project_architecture", Json::object()
+    );
+
+    assert(result.success);
+    assert(result.output.find("Workspace architecture overview") != std::string::npos);
+    assert(result.output.find("src/core/sample.cpp") != std::string::npos);
+    assert(result.output.find("include/numerick/sample.hpp") != std::string::npos);
+    assert(result.output.find("tests/sample_tests.cpp") != std::string::npos);
+    assert(result.output.find("ignored.txt") == std::string::npos);
+    assert(result.output.find("not a complete call-graph analysis") != std::string::npos);
+
+    const ToolResult unexpectedArgument = call(
+        registry, "describe_project_architecture", {{"path", "."}}
+    );
+    assert(!unexpectedArgument.success);
+    assert(unexpectedArgument.output.find("Unexpected argument: path") != std::string::npos);
+}
+
 static void testListsSafeProjectEntriesAndFiltersPrivateFolders() {
     TemporaryWorkspace workspace;
     writeText(workspace.root() / "README.md", "project readme\n");
@@ -231,6 +259,7 @@ static void testRegistersSearchAndSymbolTools() {
 
     assert(registry.contains("search_project_files"));
     assert(registry.contains("find_cpp_symbol"));
+    assert(registry.contains("describe_project_architecture"));
     assert(!registry.contains("write_project_file"));
     assert(!registry.contains("run_shell_command"));
 }
@@ -289,6 +318,7 @@ static void testFindCppSymbolRejectsInvalidIdentifiers() {
 int main() {
     testRegistersOnlyReadOnlyProjectTools();
     testRegistersSearchAndSymbolTools();
+    testDescribesWorkspaceArchitectureReadOnly();
     testSearchProjectFilesReturnsPathAndLineMatches();
     testFindCppSymbolUsesWholeIdentifierBoundaries();
     testFindCppSymbolRejectsInvalidIdentifiers();
