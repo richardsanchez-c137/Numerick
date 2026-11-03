@@ -62,6 +62,10 @@ ParsedCommand parseCommand(const std::string& input) {
         return {CommandType::Time, ""};
     }
 
+    if (normalized == "voice") {
+        return {CommandType::Voice, ""};
+    }
+
     if (normalized == "clear") {
         return {CommandType::Clear, ""};
     }

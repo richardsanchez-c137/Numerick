@@ -27,6 +27,8 @@ int main() {
     assert(parseCommand("doctor").type == CommandType::Doctor);
     assert(parseCommand(" DOCTOR ").type == CommandType::Doctor);
     assert(parseCommand("time").type == CommandType::Time);
+    assert(parseCommand("voice").type == CommandType::Voice);
+    assert(parseCommand("VOICE").type == CommandType::Voice);
     assert(parseCommand("clear").type == CommandType::Clear);
     assert(parseCommand("exit").type == CommandType::Exit);
 

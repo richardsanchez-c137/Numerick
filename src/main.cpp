@@ -6,7 +6,7 @@
 #include "numerick/project_file_tools.hpp"
 #include "numerick/tool_agent.hpp"
 #include "numerick/tool_registry.hpp"
-
+#include "numerick/voice.hpp"
 #include <charconv>
 #include <chrono>
 #include <cstdlib>
@@ -244,6 +244,70 @@ private:
             << "Type 'help' to see available commands.\n";
     }
 
+void handleVoiceCommand() {
+    std::string prompt;
+
+    try {
+        prompt = numerick::captureAndTranscribeOnce();
+    }
+    catch (const std::exception& error) {
+        std::cout
+            << "\nNUMERICK > Voice input failed.\n"
+            << "Details: " << error.what() << '\n';
+        log("Voice input failed: " + std::string(error.what()));
+        return;
+    }
+
+    if (prompt.find_first_not_of(" \t\r\n") == std::string::npos) {
+        std::cout << "NUMERICK > No speech was recognized.\n";
+        return;
+    }
+
+    std::cout << "\nYou (voice) > " << prompt << '\n';
+
+    std::string answer;
+
+    try {
+        const Json messages = conversation_.buildMessages(
+            prompt,
+            systemPromptWithMemory(kAgentSystemPrompt)
+        );
+
+        const numerick::AgentRunReport report =
+            toolAgent_.runWithConversationDiagnostics(messages);
+
+        // Record the turn only after the agent returns successfully.
+        conversation_.recordTurn(prompt, report.turnMessages);
+        answer = report.answer;
+
+        std::cout << "\nNUMERICK > " << answer << '\n';
+        std::cout
+            << "[Voice agent] model_requests=" << report.modelRequests
+            << ", tool_rounds=" << report.toolRounds
+            << ", tool_calls=" << report.toolCallsRequested
+            << '\n';
+
+        log("Voice agent request completed");
+    }
+    catch (const std::exception& error) {
+        std::cout
+            << "\nNUMERICK > The voice request failed.\n"
+            << "Details: " << error.what() << '\n';
+        log("Voice agent request failed: " + std::string(error.what()));
+        return;
+    }
+
+    // A TTS failure should not undo a completed AI response.
+    try {
+        numerick::speakText(answer);
+    }
+    catch (const std::exception& error) {
+        std::cout
+            << "[Speech output unavailable] " << error.what() << '\n';
+        log("Voice output failed: " + std::string(error.what()));
+    }
+}
+
     bool handleCommand(const numerick::ParsedCommand& command) {
         using numerick::CommandType;
 
@@ -280,6 +344,10 @@ private:
                 << "NUMERICK > Local time: "
                 << currentTime() << '\n';
             break;
+
+            case CommandType::Voice:
+    handleVoiceCommand();
+    break;
 
         case CommandType::Clear:
 #ifdef _WIN32
@@ -516,6 +584,7 @@ private:
             << "  status               - Show current status\n"
             << "  doctor               - Check Ollama connection and model\n"
             << "  time                 - Display local time\n"
+            << "  voice                - Speak a request to NUMERICK\n"
             << "  ask <question>       - Ask AI with conversation context\n"
             << "  agent <request>      - Let AI request registered tools\n"
             << "                       including safe project-file access\n"
@@ -544,7 +613,8 @@ private:
             << "Persistent memory:   "
             << persistentMemory_.size() << '/'
             << persistentMemory_.maxEntries() << " saved facts\n"
-            << "Voice input:         Not implemented\n"
+            << "Voice input:         Whisper (experimental)\n"
+            << "Speech output:       Windows SAPI\n"
             << "Vision:              Not implemented\n"
             << "Workspace root:       " << workspaceRoot_.string() << '\n'
             << "File access:          Read-only allowlisted text files\n"

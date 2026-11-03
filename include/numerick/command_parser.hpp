@@ -10,6 +10,7 @@ enum class CommandType {
     Status,
     Doctor,
     Time,
+    Voice,
     Ask,
     Agent,
     Remember,
