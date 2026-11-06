@@ -1041,3 +1041,106 @@ Record the actual results after testing the local Windows build:
 - The allowlist and blocked-path rules are defense-in-depth, not a complete OS sandbox.
 - File access remains limited to the selected workspace root and allowlisted text formats.
 - File content is untrusted data; the agent is instructed not to follow embedded instructions.
+
+
+---
+
+## Voice Engine 2.0 — Hybrid C++ and Rust Integration
+
+**Status:** Implemented locally; pending feature-branch review and CI verification.
+
+**Development branch:** `feature/voice-engine-2.0`
+
+### Architecture
+
+Voice Engine 2.0 introduces a Rust speech-generation service without replacing NUMERICK's existing C++ conversation engine.
+
+The C++ application remains responsible for microphone capture, Whisper transcription, AI interaction, conversation history, and tool orchestration.
+
+Rust acts as a dedicated speech-generation worker. It launches NVIDIA's local Qwen3-TTS runtime, supplies the custom speaker profile and requested text, validates the generated WAV, and reports failures to the C++ caller.
+
+### Implemented components
+
+- Existing Whisper microphone capture and local transcription retained.
+- Rust voice service created under `voice-service/`.
+- NVIDIA Qwen3-TTS integration through the NVIGI executable.
+- CUDA inference backend support.
+- Custom speaker embedding and in-context reference audio conditioning.
+- Output-name validation to reject path traversal.
+- Configurable runtime paths through environment variables.
+- Windows process management and generated WAV playback from C++.
+- Windows SAPI retained as a fallback.
+- Launcher configuration added to `scripts/run-numerick.ps1`.
+
+### Local voice assets
+
+The development setup stores voice assets outside the Git repository:
+
+```text
+NumerickVoiceLab/
+├── reference.wav
+├── reference.txt
+├── reference.json
+├── generated/
+└── NVIDIA-Qwen3-TTS/
+    └── _qwen_tts_pack/
+```
+
+The reference recording, transcript, and speaker profile are private user data. They must never be committed or included in CI artifacts.
+
+The NVIDIA runtime and model weights are also installed separately and are not distributed by the NUMERICK repository.
+
+### Rust service configuration
+
+The service reads the following environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `NUMERICK_TTS_EXE` | NVIDIA TTS executable |
+| `NUMERICK_TTS_MODELS` | NVIDIA model directory |
+| `NUMERICK_TTS_SPEAKER` | Local speaker profile JSON |
+| `NUMERICK_TTS_OUTPUT_DIR` | Generated WAV output directory |
+| `NUMERICK_TTS_BACKEND` | Inference backend; CUDA by default |
+
+The application launcher additionally configures:
+
+`NUMERICK_VOICE_SERVICE_EXE`
+
+This identifies the compiled Rust worker executable.
+
+### Verification results
+
+Local verification recorded during development:
+
+- Rust unit tests: 4 passed, 0 failed.
+- Rust release build: successful.
+- C++ automated tests: 10 passed.
+- C++ release build: successful.
+- NVIDIA CUDA backend: detected on the RTX 4050 Laptop GPU.
+- Custom speaker profile: loaded successfully.
+- Rust-to-NVIDIA synthesis: successful.
+- Generated WAV playback: successful.
+- Full microphone-to-AI-to-custom-voice conversation: successful.
+- SAPI fallback: retained in the C++ implementation.
+
+One observed synthesis generated 4.48 seconds of audio with 1.44 seconds of reported inference time. This is a single development measurement, not a performance guarantee.
+
+### Continuous integration
+
+The Windows UCRT64 workflow is extended to:
+
+- Install the MSYS2 Rust package.
+- Configure and build the C++ application.
+- Run the C++ CTest suite.
+- Run Rust unit tests.
+- Build the Rust release executable.
+
+CI does not require the NVIDIA runtime, private reference recording, speaker profile, or generated audio.
+
+### Remaining work
+
+- Verify the updated GitHub Actions workflow on the feature branch.
+- Review the complete C++ and Rust integration diff.
+- Complete documentation and release checklist updates.
+- Perform a clean local build and final voice smoke test.
+- Review and merge the feature branch only after successful verification.

@@ -4,6 +4,7 @@ This checklist defines the evidence required before calling v1.0.0 release-ready
 
 ## 1. Source and repository hygiene
 
+- [ ] Reference recordings, transcripts, speaker profiles, generated audio, and NVIDIA model weights are excluded from Git.
 - [ ] `git status --short` has no unintended files.
 - [ ] No secrets, user memory files, logs, binaries, build directories, local backups, or temporary patch scripts are staged.
 - [ ] `git diff --check` and `git diff --cached --check` report no whitespace errors.
@@ -30,11 +31,19 @@ If CMake needs an explicit generator, specify it, for example:
 
 ## 3. Continuous integration
 
+- [ ] Rust voice-service unit tests pass.
+- [ ] Rust release executable builds successfully.
+- [ ] CI does not require private voice assets or NVIDIA model weights.
 - [ ] The `Windows UCRT64 CI` GitHub Actions workflow succeeds on the release commit.
 - [ ] CI configures a fresh build using MSYS2 UCRT64, builds all targets, and runs CTest.
 - [ ] The CI test run does not require Ollama or the user's local memory data.
 
 ## 4. Manual runtime smoke test
+
+- [ ] Whisper captures and transcribes a voice request.
+- [ ] NVIDIA Qwen3-TTS generates and plays the assistant response when configured.
+- [ ] SAPI fallback works when custom voice configuration is unavailable.
+- [ ] The status command reports the configured speech engine accurately.
 
 Run:
 

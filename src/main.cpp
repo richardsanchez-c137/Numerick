@@ -613,8 +613,15 @@ void handleVoiceCommand() {
             << "Persistent memory:   "
             << persistentMemory_.size() << '/'
             << persistentMemory_.maxEntries() << " saved facts\n"
-            << "Voice input:         Whisper (experimental)\n"
-            << "Speech output:       Windows SAPI\n"
+           << "Voice input:         Whisper (local)\n"
+            << "Speech output:       "
+            << (
+                std::getenv("NUMERICK_VOICE_SERVICE_EXE") != nullptr &&
+                std::getenv("NUMERICK_VOICE_SERVICE_EXE")[0] != '\0'
+                    ? "NVIDIA Qwen3-TTS (custom voice)\n"
+                    : "Windows SAPI (fallback)\n"
+            )
+            << "Speech fallback:     Windows SAPI\n"
             << "Vision:              Not implemented\n"
             << "Workspace root:       " << workspaceRoot_.string() << '\n'
             << "File access:          Read-only allowlisted text files\n"

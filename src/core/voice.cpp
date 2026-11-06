@@ -4,6 +4,7 @@
 #endif
 #define SDL_MAIN_HANDLED
 #include <windows.h>
+#include <mmsystem.h>
 #include <sapi.h>
 #include <SDL.h>
 #include <whisper.h>
@@ -21,10 +22,14 @@
 #include <thread>
 #include <vector>
 
+
+
 namespace numerick {
 namespace {
 
 constexpr int kSampleRate = 16000;
+constexpr DWORD kTtsSynthesisTimeoutMs = 180000; // 3 minutes
+constexpr DWORD kTtsTerminationWaitMs = 10000;   // 10 seconds
 std::once_flag ggmlBackendLoadOnce;
 constexpr std::size_t kMaxRecordingSeconds = 30;
 constexpr std::size_t kMaxSamples =
@@ -224,6 +229,360 @@ std::wstring utf8ToWide(const std::string& text) {
     return result;
 }
 
+std::wstring readWideEnvironmentVariable(const wchar_t* name) {
+    const DWORD required = GetEnvironmentVariableW(name, nullptr, 0);
+
+    if (required == 0) {
+        return {};
+    }
+
+    std::wstring value(static_cast<std::size_t>(required), L'\0');
+
+    const DWORD written = GetEnvironmentVariableW(
+        name,
+        value.data(),
+        required
+    );
+
+    if (written == 0 || written >= required) {
+        return {};
+    }
+
+    value.resize(static_cast<std::size_t>(written));
+    return value;
+}
+
+std::wstring quoteWindowsArgument(const std::wstring& value) {
+    std::wstring result = L"\"";
+    std::size_t backslashes = 0;
+
+    for (const wchar_t character : value) {
+        if (character == L'\\') {
+            ++backslashes;
+            continue;
+        }
+
+        if (character == L'"') {
+            result.append(backslashes * 2 + 1, L'\\');
+            result.push_back(L'"');
+        }
+        else {
+            result.append(backslashes, L'\\');
+            result.push_back(character);
+        }
+
+        backslashes = 0;
+    }
+
+    result.append(backslashes * 2, L'\\');
+    result.push_back(L'"');
+
+    return result;
+}
+
+bool speakWithNvidiaQwen(const std::string& text) {
+    const std::wstring serviceValue =
+        readWideEnvironmentVariable(L"NUMERICK_VOICE_SERVICE_EXE");
+
+    const std::wstring outputValue =
+        readWideEnvironmentVariable(L"NUMERICK_TTS_OUTPUT_DIR");
+
+    // No custom voice configuration: let the caller use SAPI.
+    if (serviceValue.empty() || outputValue.empty()) {
+        return false;
+    }
+
+    const std::filesystem::path servicePath(serviceValue);
+    const std::filesystem::path outputDirectory(outputValue);
+
+    if (!std::filesystem::is_regular_file(servicePath)) {
+        throw std::runtime_error(
+            "The Rust voice-service executable was not found."
+        );
+    }
+
+    std::error_code directoryError;
+    std::filesystem::create_directories(
+        outputDirectory,
+        directoryError
+    );
+
+    if (directoryError ||
+        !std::filesystem::is_directory(outputDirectory)) {
+        throw std::runtime_error(
+            "Could not access the custom voice output directory."
+        );
+    }
+
+    // Unique, filesystem-safe output name.
+    const std::wstring outputName =
+        L"numerick-" +
+        std::to_wstring(GetCurrentProcessId()) +
+        L"-" +
+        std::to_wstring(GetTickCount64());
+
+    const std::filesystem::path wavPath =
+        outputDirectory / (outputName + L".wav");
+
+    const std::filesystem::path logPath =
+        outputDirectory / (outputName + L".log");
+
+    // Keep NVIDIA/Rust diagnostics in a file instead of flooding the console.
+    SECURITY_ATTRIBUTES logSecurity{};
+    logSecurity.nLength = sizeof(logSecurity);
+    logSecurity.bInheritHandle = TRUE;
+
+    HANDLE logHandle = CreateFileW(
+        logPath.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ,
+        &logSecurity,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr
+    );
+
+    if (logHandle == INVALID_HANDLE_VALUE) {
+        throw std::runtime_error(
+            "Could not create the voice-service diagnostic log."
+        );
+    }
+
+        const std::wstring commandLine =
+        quoteWindowsArgument(servicePath.wstring()) +
+        L" --text " + quoteWindowsArgument(utf8ToWide(text)) +
+        L" --output-name " + quoteWindowsArgument(outputName);
+
+    std::vector<wchar_t> mutableCommandLine(
+        commandLine.begin(),
+        commandLine.end()
+    );
+    mutableCommandLine.push_back(L'\0');
+
+    // Place the Rust worker and its NVIDIA child process in one job.
+    // Closing the job terminates every process belonging to it.
+    HANDLE jobHandle = CreateJobObjectW(nullptr, nullptr);
+
+    if (jobHandle == nullptr) {
+        const DWORD error = GetLastError();
+        CloseHandle(logHandle);
+
+        throw std::runtime_error(
+            "Could not create the voice-service process job. Windows error: " +
+            std::to_string(error)
+        );
+    }
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobLimits{};
+    jobLimits.BasicLimitInformation.LimitFlags =
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+    if (!SetInformationJobObject(
+            jobHandle,
+            JobObjectExtendedLimitInformation,
+            &jobLimits,
+            sizeof(jobLimits)
+        )) {
+        const DWORD error = GetLastError();
+        CloseHandle(logHandle);
+        CloseHandle(jobHandle);
+
+        throw std::runtime_error(
+            "Could not configure voice-service process cleanup. Windows error: " +
+            std::to_string(error)
+        );
+    }
+
+    STARTUPINFOW startupInfo{};
+    startupInfo.cb = sizeof(startupInfo);
+    startupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startupInfo.hStdInput = logHandle;
+    startupInfo.hStdOutput = logHandle;
+    startupInfo.hStdError = logHandle;
+
+    PROCESS_INFORMATION processInfo{};
+
+    const std::filesystem::path serviceDirectory =
+        servicePath.parent_path();
+
+    // Start suspended so the process can be assigned to its job
+    // before it has an opportunity to spawn NVIDIA.
+    const BOOL started = CreateProcessW(
+        servicePath.c_str(),
+        mutableCommandLine.data(),
+        nullptr,
+        nullptr,
+        TRUE,
+        CREATE_NO_WINDOW | CREATE_SUSPENDED,
+        nullptr,
+        serviceDirectory.c_str(),
+        &startupInfo,
+        &processInfo
+    );
+
+    const DWORD launchError =
+        started ? ERROR_SUCCESS : GetLastError();
+
+    CloseHandle(logHandle);
+
+    if (!started) {
+        CloseHandle(jobHandle);
+
+        throw std::runtime_error(
+            "Could not start the Rust voice service. Windows error: " +
+            std::to_string(launchError)
+        );
+    }
+
+    if (!AssignProcessToJobObject(
+            jobHandle,
+            processInfo.hProcess
+        )) {
+        const DWORD error = GetLastError();
+
+        TerminateProcess(processInfo.hProcess, 1);
+        WaitForSingleObject(
+            processInfo.hProcess,
+            kTtsTerminationWaitMs
+        );
+
+        CloseHandle(processInfo.hThread);
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(jobHandle);
+
+        throw std::runtime_error(
+            "Could not assign the Rust voice service to its process job. "
+            "Windows error: " + std::to_string(error)
+        );
+    }
+
+    if (ResumeThread(processInfo.hThread) ==
+        static_cast<DWORD>(-1)) {
+        const DWORD error = GetLastError();
+
+        TerminateJobObject(jobHandle, 1);
+        WaitForSingleObject(
+            processInfo.hProcess,
+            kTtsTerminationWaitMs
+        );
+
+        CloseHandle(processInfo.hThread);
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(jobHandle);
+
+        throw std::runtime_error(
+            "Could not start the Rust voice-service thread. Windows error: " +
+            std::to_string(error)
+        );
+    }
+
+    CloseHandle(processInfo.hThread);
+
+    const DWORD waitResult = WaitForSingleObject(
+        processInfo.hProcess,
+        kTtsSynthesisTimeoutMs
+    );
+
+    if (waitResult == WAIT_TIMEOUT) {
+        TerminateJobObject(jobHandle, ERROR_TIMEOUT);
+
+        WaitForSingleObject(
+            processInfo.hProcess,
+            kTtsTerminationWaitMs
+        );
+
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(jobHandle);
+
+        throw std::runtime_error(
+            "Voice synthesis exceeded the 180-second timeout. "
+            "The Rust worker and its child processes were terminated."
+        );
+    }
+
+    if (waitResult != WAIT_OBJECT_0) {
+        const DWORD error = GetLastError();
+
+        TerminateJobObject(jobHandle, 1);
+
+        WaitForSingleObject(
+            processInfo.hProcess,
+            kTtsTerminationWaitMs
+        );
+
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(jobHandle);
+
+        throw std::runtime_error(
+            "Waiting for the Rust voice service failed. Windows error: " +
+            std::to_string(error)
+        );
+    }
+
+    DWORD exitCode = 1;
+
+    if (!GetExitCodeProcess(processInfo.hProcess, &exitCode)) {
+        const DWORD error = GetLastError();
+
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(jobHandle);
+
+        throw std::runtime_error(
+            "Could not read the voice-service exit code. Windows error: " +
+            std::to_string(error)
+        );
+    }
+
+    CloseHandle(processInfo.hProcess);
+
+    // Also terminates any unexpected leftover child processes.
+    CloseHandle(jobHandle);
+
+    if (exitCode != 0) {
+        throw std::runtime_error(
+            "The Rust voice service failed with exit code " +
+            std::to_string(exitCode) +
+            ". Its diagnostic log was retained in the generated folder."
+        );
+    }
+
+    std::error_code fileError;
+
+    if (!std::filesystem::is_regular_file(wavPath, fileError) ||
+        fileError ||
+        std::filesystem::file_size(wavPath, fileError) <= 44 ||
+        fileError) {
+        throw std::runtime_error(
+            "The Rust service finished, but no valid WAV file was produced."
+        );
+    }
+
+    std::cout
+        << "[Voice] Speaking with NVIDIA Qwen3-TTS custom voice.\n";
+
+        if (!PlaySoundW(
+            wavPath.c_str(),
+            nullptr,
+            SND_FILENAME | SND_SYNC | SND_NODEFAULT
+        )) {
+        throw std::runtime_error(
+            "Windows could not play the generated voice WAV."
+        );
+    }
+
+    // Conversation audio is temporary and private.
+    if (!DeleteFileW(wavPath.c_str())) {
+        std::cerr
+            << "[Voice] Warning: Could not delete temporary WAV. Windows error: "
+            << GetLastError() << '\n';
+    }
+
+    // Successful diagnostic logs are no longer needed.
+    DeleteFileW(logPath.c_str());
+
+    return true;
+}
+
 } // namespace
 
 std::string captureAndTranscribeOnce() {
@@ -388,6 +747,24 @@ void speakText(const std::string& text) {
         return;
     }
 
+    // Try the custom NVIDIA voice first.
+    try {
+        if (speakWithNvidiaQwen(text)) {
+            return;
+        }
+
+        std::cout
+            << "[Voice] Custom voice is not configured. "
+            << "Using Windows SAPI.\n";
+    }
+    catch (const std::exception& error) {
+        std::cerr
+            << "[Voice] NVIDIA Qwen3-TTS unavailable: "
+            << error.what() << '\n'
+            << "[Voice] Falling back to Windows SAPI.\n";
+    }
+
+    // Existing SAPI implementation remains the fallback.
     const std::wstring wideText = utf8ToWide(text);
     ComApartment apartment;
 

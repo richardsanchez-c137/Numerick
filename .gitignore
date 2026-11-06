@@ -30,3 +30,6 @@ Thumbs.db
 
 # Local speech recognition model weights
 models/
+
+# Rust build output
+/voice-service/target/
