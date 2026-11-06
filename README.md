@@ -4,9 +4,12 @@
 
 NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
 
-## Current development status — 1.2.0
+## Stable baseline — v1.2.0 | Voice Engine 2.0 in development
 
 Implemented:
+- Local speech recognition using Whisper
+- Optional NVIDIA Qwen3-TTS custom speech synthesis through a Rust voice service
+- Windows SAPI fallback when the custom voice service is unavailable
 - C++17 command-line assistant
 - Local Qwen 3.5 4B integration through Ollama
 - `ask` and `agent` commands with bounded in-memory conversation history
@@ -30,12 +33,69 @@ ask Explain an API in one sentence.
 agent What time is it right now?
 remember My project ID is MINT-482
 memories
+voice
 forget 1
 clear
 exit
 ```
 
 `ask` sends a question to the model with recent conversation context. `agent` also supplies registered tool definitions and can execute tools from the approved registry.
+
+
+
+## Local voice engine
+
+NUMERICK supports spoken conversations through a hybrid C++ and Rust architecture.
+
+### Voice pipeline
+
+1. SDL2 captures microphone audio.
+2. Whisper transcribes the recording locally.
+3. The C++ conversation engine sends the transcription to the configured Ollama model.
+4. The Rust voice service invokes NVIDIA Qwen3-TTS.
+5. The generated WAV is played through Windows audio playback.
+6. Windows SAPI remains the fallback speech engine.
+
+### Voice components
+
+| Component | Responsibility |
+|---|---|
+| C++ | Microphone capture, transcription, conversation orchestration |
+| Whisper | Local speech-to-text |
+| Rust voice service | Validated speech-generation requests and NVIDIA process management |
+| NVIDIA Qwen3-TTS | Custom voice synthesis |
+| Windows SAPI | Fallback speech synthesis |
+
+The custom voice configuration is optional and is loaded by `scripts/run-numerick.ps1`.
+
+The local setup expects the NVIDIA runtime package, its model files, a Rust release executable, and a speaker profile generated from the user's authorized reference recording.
+
+Private voice recordings, transcripts, speaker profiles, NVIDIA model weights, diagnostic logs, and generated audio must remain outside version control.
+
+Without the optional custom voice assets, NUMERICK continues to use Windows SAPI.
+
+### Build and test the Rust service
+
+From the repository root:
+
+```powershell
+cargo test --locked --manifest-path .\voice-service\Cargo.toml
+
+cargo build --release --locked --manifest-path .\voice-service\Cargo.toml
+```
+
+The Rust service uses the standard library and invokes the NVIDIA runtime as a separate process.
+
+The current implementation starts a new NVIDIA process for each speech request, so model initialization occurs for each utterance. Persistent inference and streaming playback are potential future improvements.
+
+### Current voice limitations
+
+- No wake-word activation.
+- No real-time streaming speech generation.
+- No interruption or barge-in support.
+- The NVIDIA runtime and custom speaker profile require separate local installation.
+- The custom NVIDIA runtime is an experimental release candidate.
+
 
 ## Persistent memory
 
@@ -148,7 +208,7 @@ The script removes only the selected in-repository build directory when `-Clean`
 - JSON Schema validation supports only a subset of the standard.
 - Project file tools are read-only and intentionally exclude many paths and file types; they are not a substitute for a full security sandbox.
 - Only local-time and scoped, read-only workspace/codebase tools are registered. Arbitrary shell commands and computer control are not enabled.
-- Voice, camera understanding, web research, and a graphical interface are not implemented.
+- Wake-word activation, real-time voice streaming, camera understanding, web research, and a graphical interface are not implemented.
 
 ## Project principles
 

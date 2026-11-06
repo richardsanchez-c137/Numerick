@@ -77,6 +77,7 @@ target_link_libraries(numerick PRIVATE
     sapi
     ole32
     uuid
+    winmm
 )
 numerick_enable_warnings(numerick)
 
