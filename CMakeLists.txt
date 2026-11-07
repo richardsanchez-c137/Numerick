@@ -52,6 +52,7 @@ endfunction()
 add_executable(numerick
     src/main.cpp
     src/core/voice.cpp
+    src/core/persistent_voice_client.cpp
     src/core/ai_client.cpp
     src/core/ai_client.cpp
     src/core/ollama_response.cpp

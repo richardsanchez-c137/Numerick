@@ -10,6 +10,7 @@
 #include <whisper.h>
 #include "numerick/voice.hpp"
 #include <ggml-backend.h>
+#include "numerick/persistent_voice_client.hpp"
 #include <mutex>
 #include <algorithm>
 #include <cstdlib>
@@ -742,29 +743,79 @@ std::string captureAndTranscribeOnce() {
     return transcript;
 }
 
+bool speakWithPersistentNvidiaQwen(const std::string& text) {
+    const std::wstring serviceValue =
+        readWideEnvironmentVariable(L"NUMERICK_VOICE_SERVICE_EXE");
+
+    const std::wstring outputValue =
+        readWideEnvironmentVariable(L"NUMERICK_TTS_OUTPUT_DIR");
+
+    if (serviceValue.empty() || outputValue.empty()) {
+        return false;
+    }
+
+    static std::mutex clientMutex;
+    static std::unique_ptr<PersistentVoiceClient> client;
+
+    std::lock_guard<std::mutex> lock(clientMutex);
+
+    try {
+        if (!client) {
+            std::cout
+                << "[Voice] Starting persistent NVIDIA voice engine...\n";
+
+            client = std::make_unique<PersistentVoiceClient>();
+
+            std::cout
+                << "[Voice] Persistent voice engine is ready.\n";
+        }
+
+        client->speak(text);
+        return true;
+    }
+    catch (...) {
+        if (client) {
+            client->shutdown();
+            client.reset();
+        }
+
+        throw;
+    }
+}
+
 void speakText(const std::string& text) {
     if (text.empty()) {
         return;
     }
 
-    // Try the custom NVIDIA voice first.
+    // Primary: persistent Rust + NVIDIA Qwen3-TTS.
+    try {
+        if (speakWithPersistentNvidiaQwen(text)) {
+            return;
+        }
+    }
+    catch (const std::exception& error) {
+        std::cerr
+            << "[Voice] Persistent NVIDIA engine failed: "
+            << error.what() << '\n';
+    }
+
+    // Secondary: existing one-shot NVIDIA implementation.
     try {
         if (speakWithNvidiaQwen(text)) {
             return;
         }
-
-        std::cout
-            << "[Voice] Custom voice is not configured. "
-            << "Using Windows SAPI.\n";
     }
     catch (const std::exception& error) {
         std::cerr
-            << "[Voice] NVIDIA Qwen3-TTS unavailable: "
-            << error.what() << '\n'
-            << "[Voice] Falling back to Windows SAPI.\n";
+            << "[Voice] One-shot NVIDIA engine failed: "
+            << error.what() << '\n';
     }
 
-    // Existing SAPI implementation remains the fallback.
+    std::cout
+        << "[Voice] Using Windows SAPI fallback.\n";
+
+    // Final fallback: existing Windows speech implementation.
     const std::wstring wideText = utf8ToWide(text);
     ComApartment apartment;
 

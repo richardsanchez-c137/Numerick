@@ -1,7 +1,6 @@
-
+mod persistent;
 use std::{
-    env,
-    fs,
+    env, fs,
     path::PathBuf,
     process::{Command, ExitCode},
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -21,12 +20,12 @@ struct Config {
 struct Cli {
     text: Option<String>,
     output_name: Option<String>,
+    persistent: bool,
     help: bool,
 }
 
 fn read_absolute_path(name: &str) -> Result<PathBuf, String> {
-    let raw = env::var_os(name)
-        .ok_or_else(|| format!("Missing environment variable: {name}"))?;
+    let raw = env::var_os(name).ok_or_else(|| format!("Missing environment variable: {name}"))?;
 
     let path = PathBuf::from(raw);
 
@@ -55,10 +54,7 @@ fn load_config() -> Result<Config, String> {
     let output_dir = read_absolute_path("NUMERICK_TTS_OUTPUT_DIR")?;
 
     if !exe.is_file() {
-        return Err(format!(
-            "NVIDIA executable not found: {}",
-            exe.display()
-        ));
+        return Err(format!("NVIDIA executable not found: {}", exe.display()));
     }
 
     if !models.is_dir() {
@@ -69,28 +65,24 @@ fn load_config() -> Result<Config, String> {
     }
 
     if !speaker.is_file() {
-        return Err(format!(
-            "Voice profile not found: {}",
-            speaker.display()
-        ));
+        return Err(format!("Voice profile not found: {}", speaker.display()));
     }
 
     if fs::metadata(&speaker)
         .map_err(|e| format!("Cannot inspect voice profile: {e}"))?
-        .len() == 0
+        .len()
+        == 0
     {
         return Err("Voice profile is empty.".to_string());
     }
 
-    fs::create_dir_all(&output_dir)
-        .map_err(|e| format!("Cannot create output directory: {e}"))?;
+    fs::create_dir_all(&output_dir).map_err(|e| format!("Cannot create output directory: {e}"))?;
 
     let output_dir = output_dir
         .canonicalize()
         .map_err(|e| format!("Cannot resolve output directory: {e}"))?;
 
-    let backend = env::var("NUMERICK_TTS_BACKEND")
-        .unwrap_or_else(|_| "cuda".to_string());
+    let backend = env::var("NUMERICK_TTS_BACKEND").unwrap_or_else(|_| "cuda".to_string());
 
     let backend = validate_backend(&backend)?;
 
@@ -112,10 +104,7 @@ fn validate_output_name(name: &str) -> Result<(), String> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
-        return Err(
-            "Output name may contain only letters, numbers, '-' and '_'."
-                .to_string(),
-        );
+        return Err("Output name may contain only letters, numbers, '-' and '_'.".to_string());
     }
 
     Ok(())
@@ -128,6 +117,7 @@ fn parse_arguments() -> Result<Cli, String> {
         text: None,
         output_name: None,
         help: false,
+        persistent: false,
     };
 
     while let Some(arg) = args.next() {
@@ -135,24 +125,20 @@ fn parse_arguments() -> Result<Cli, String> {
             "--help" | "-h" => cli.help = true,
 
             "--text" => {
-                let value = args
-                    .next()
-                    .ok_or("--text requires a value.")?;
+                let value = args.next().ok_or("--text requires a value.")?;
 
                 if cli.text.replace(value).is_some() {
                     return Err("--text must only be supplied once.".to_string());
                 }
             }
 
+            "--persistent" => cli.persistent = true,
+
             "--output-name" => {
-                let value = args
-                    .next()
-                    .ok_or("--output-name requires a value.")?;
+                let value = args.next().ok_or("--output-name requires a value.")?;
 
                 if cli.output_name.replace(value).is_some() {
-                    return Err(
-                        "--output-name must only be supplied once.".to_string()
-                    );
+                    return Err("--output-name must only be supplied once.".to_string());
                 }
             }
 
@@ -160,6 +146,10 @@ fn parse_arguments() -> Result<Cli, String> {
                 return Err(format!("Unknown argument: {unknown}"));
             }
         }
+    }
+
+    if cli.persistent && (cli.text.is_some() || cli.output_name.is_some()) {
+        return Err("--persistent cannot be combined with --text or --output-name.".to_string());
     }
 
     Ok(cli)
@@ -174,11 +164,7 @@ fn generated_output_name() -> String {
     format!("speech-{timestamp}")
 }
 
-fn generate_speech(
-    config: &Config,
-    text: &str,
-    output_name: &str,
-) -> Result<PathBuf, String> {
+fn generate_speech(config: &Config, text: &str, output_name: &str) -> Result<PathBuf, String> {
     if text.trim().is_empty() {
         return Err("Speech text cannot be empty.".to_string());
     }
@@ -189,9 +175,7 @@ fn generate_speech(
 
     validate_output_name(output_name)?;
 
-    let output_path = config
-        .output_dir
-        .join(format!("{output_name}.wav"));
+    let output_path = config.output_dir.join(format!("{output_name}.wav"));
 
     if output_path.exists() {
         return Err(format!(
@@ -200,7 +184,8 @@ fn generate_speech(
         ));
     }
 
-    let exe_dir = config.exe
+    let exe_dir = config
+        .exe
         .parent()
         .ok_or("Cannot determine NVIDIA executable directory.")?;
 
@@ -234,10 +219,7 @@ fn generate_speech(
     }
 
     if !result.status.success() {
-        return Err(format!(
-            "NVIDIA TTS exited with status {}.",
-            result.status
-        ));
+        return Err(format!("NVIDIA TTS exited with status {}.", result.status));
     }
 
     let metadata = fs::metadata(&output_path)
@@ -264,6 +246,7 @@ fn print_help() {
          \n\
          Usage:\n\
          numerick-voice-service --text \"Text to speak\" [--output-name NAME]\n\
+         numerick-voice-service --persistent\n\
          \n\
          Required environment variables:\n\
          NUMERICK_TTS_EXE\n\
@@ -290,6 +273,26 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    let config = match load_config() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("[voice-service] Configuration error: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // New persistent NVIDIA runtime mode.
+    if cli.persistent {
+        return match persistent::run(&config) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("[voice-service] Persistent worker failed: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+
+    // Existing one-shot mode remains available.
     let text = match cli.text {
         Some(text) => text,
         None => {
@@ -299,16 +302,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let output_name = cli.output_name
-        .unwrap_or_else(generated_output_name);
-
-    let config = match load_config() {
-        Ok(config) => config,
-        Err(error) => {
-            eprintln!("[voice-service] Configuration error: {error}");
-            return ExitCode::FAILURE;
-        }
-    };
+    let output_name = cli.output_name.unwrap_or_else(generated_output_name);
 
     match generate_speech(&config, &text, &output_name) {
         Ok(_) => ExitCode::SUCCESS,
@@ -318,7 +312,6 @@ fn main() -> ExitCode {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
