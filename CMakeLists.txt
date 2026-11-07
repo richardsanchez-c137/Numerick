@@ -53,6 +53,7 @@ add_executable(numerick
     src/main.cpp
     src/core/voice.cpp
     src/core/persistent_voice_client.cpp
+    src/core/continuous_voice_session.cpp
     src/core/ai_client.cpp
     src/core/ai_client.cpp
     src/core/ollama_response.cpp
@@ -60,6 +61,8 @@ add_executable(numerick
     src/core/command_parser.cpp
     src/core/conversation_session.cpp
     src/core/persistent_memory.cpp
+    src/tools/application_tools.cpp
+    src/tools/application_matcher.cpp
     src/tools/project_file_tools.cpp
     src/core/tool_agent.cpp
     src/tools/tool_registry.cpp
@@ -73,6 +76,7 @@ target_include_directories(numerick PRIVATE
 
 target_link_libraries(numerick PRIVATE
     winhttp
+    shell32
     whisper
     "${SDL2_LIBRARY}"
     sapi
@@ -155,6 +159,16 @@ target_include_directories(project_file_tools_tests PRIVATE include)
 numerick_enable_warnings(project_file_tools_tests)
 add_test(NAME project_file_tools_tests COMMAND project_file_tools_tests)
 
+# Application-name matching tests do not launch real applications.
+add_executable(application_matcher_tests
+    tests/application_matcher_tests.cpp
+    src/tools/application_matcher.cpp
+)
+
+target_include_directories(application_matcher_tests PRIVATE include)
+numerick_enable_warnings(application_matcher_tests)
+add_test(NAME application_matcher_tests COMMAND application_matcher_tests)
+
 # Config parsing and health-response tests do not require a live Ollama service.
 add_executable(ollama_config_tests
     tests/ollama_config_tests.cpp
@@ -184,6 +198,7 @@ set_tests_properties(
     project_file_tools_tests
     ollama_config_tests
     ollama_response_tests
+    application_matcher_tests
     PROPERTIES
         LABELS "automated"
         TIMEOUT 30
