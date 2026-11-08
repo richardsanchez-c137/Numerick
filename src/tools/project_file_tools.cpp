@@ -1112,6 +1112,56 @@ std::string describeProjectArchitecture(const fs::path& canonicalRoot) {
 }
 
 
+
+ToolResult classifyProjectFileException(
+    const std::exception& exception
+) {
+    const std::string details = exception.what();
+
+    if (dynamic_cast<const std::invalid_argument*>(&exception) != nullptr) {
+        const bool policyDenied =
+            details.find("Absolute paths are not allowed") != std::string::npos ||
+            details.find("Parent-directory traversal") != std::string::npos ||
+            details.find("resolves outside") != std::string::npos ||
+            details.find("excluded by the project-file access policy") != std::string::npos;
+
+        if (policyDenied) {
+            return ToolResult::rejected(
+                ToolErrorCode::PermissionDenied,
+                details.find("Absolute paths are not allowed") != std::string::npos ? "Absolute paths are not allowed." : details.find("Parent-directory traversal") != std::string::npos ? "Parent-directory traversal ('..') is not allowed." : details.find("resolves outside") != std::string::npos ? "The requested path resolves outside the allowed workspace." : "This path is excluded by the project-file access policy.",
+                details
+            );
+        }
+
+        return ToolResult::rejected(
+            ToolErrorCode::InvalidArguments,
+            details
+        );
+    }
+
+    if (details.find("does not exist") != std::string::npos) {
+        return ToolResult::failed(
+            ToolErrorCode::ResourceNotFound,
+            "The requested workspace resource was not found.",
+            details
+        );
+    }
+
+    if (details.find("read limit") != std::string::npos ||
+        details.find("exceeds the") != std::string::npos) {
+        return ToolResult::rejected(
+            ToolErrorCode::ResourceLimitExceeded,
+            "The requested file exceeds the configured read limit.",
+            details
+        );
+    }
+
+    return ToolResult::failed(
+        ToolErrorCode::IoError,
+        details.find("binary data") != std::string::npos ? "The requested file contains binary data and cannot be read as text." : details.find("valid UTF-8") != std::string::npos ? "The requested file is not valid UTF-8 text." : "A project workspace operation failed.",
+        details
+    );
+}
 } // namespace
 
 fs::path configuredWorkspaceRoot() {
@@ -1169,15 +1219,15 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
+        [canonicalRoot](const Json& arguments) -> ToolResult {
             try {
-                return {true, listDirectory(
+                return ToolResult::succeeded(listDirectory(
                     canonicalRoot,
                     requireStringArgument(arguments, "path")
-                )};
+                ));
             }
             catch (const std::exception& exception) {
-                return {false, exception.what()};
+                return classifyProjectFileException(exception);
             }
         }
     );
@@ -1199,15 +1249,15 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
+        [canonicalRoot](const Json& arguments) -> ToolResult {
             try {
-                return {true, readProjectFile(
+                return ToolResult::succeeded(readProjectFile(
                     canonicalRoot,
                     requireStringArgument(arguments, "path")
-                )};
+                ));
             }
             catch (const std::exception& exception) {
-                return {false, exception.what()};
+                return classifyProjectFileException(exception);
             }
         }
     );
@@ -1226,18 +1276,18 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
+        [canonicalRoot](const Json& arguments) -> ToolResult {
             try {
-                return {true, searchWorkspace(
+                return ToolResult::succeeded(searchWorkspace(
                     canonicalRoot,
                     requireStringArgument(arguments, "query"),
                     false,
                     false,
                     true
-                )};
+                ));
             }
             catch (const std::exception& exception) {
-                return {false, exception.what()};
+                return classifyProjectFileException(exception);
             }
         }
     );
@@ -1256,7 +1306,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
+        [canonicalRoot](const Json& arguments) -> ToolResult {
             try {
                 const std::string symbol = requireStringArgument(arguments, "symbol");
                 if (!isValidCppIdentifier(trim(symbol))) {
@@ -1265,16 +1315,16 @@ void registerProjectFileTools(
                         "not starting with a digit)."
                     );
                 }
-                return {true, searchWorkspace(
+                return ToolResult::succeeded(searchWorkspace(
                     canonicalRoot,
                     trim(symbol),
                     true,
                     true,
                     false
-                )};
+                ));
             }
             catch (const std::exception& exception) {
-                return {false, exception.what()};
+                return classifyProjectFileException(exception);
             }
         }
     );
@@ -1294,18 +1344,18 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
+        [canonicalRoot](const Json& arguments) -> ToolResult {
             try {
-                return {true, inspectCppMemberRelationship(
+                return ToolResult::succeeded(inspectCppMemberRelationship(
                     canonicalRoot,
                     requireStringArgument(arguments, "class_a"),
                     requireStringArgument(arguments, "member_a"),
                     requireStringArgument(arguments, "class_b"),
                     requireStringArgument(arguments, "member_b")
-                )};
+                ));
             }
             catch (const std::exception& exception) {
-                return {false, exception.what()};
+                return classifyProjectFileException(exception);
             }
         }
     );
@@ -1323,15 +1373,15 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
+        [canonicalRoot](const Json& arguments) -> ToolResult {
             try {
-                return {true, inspectCppComponent(
+                return ToolResult::succeeded(inspectCppComponent(
                     canonicalRoot,
                     requireStringArgument(arguments, "symbol")
-                )};
+                ));
             }
             catch (const std::exception& exception) {
-                return {false, exception.what()};
+                return classifyProjectFileException(exception);
             }
         }
     );
@@ -1346,17 +1396,17 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
+        [canonicalRoot](const Json& arguments) -> ToolResult {
             try {
                 if (!arguments.is_object() || !arguments.empty()) {
                     throw std::invalid_argument(
                         "describe_project_architecture accepts no arguments."
                     );
                 }
-                return {true, describeProjectArchitecture(canonicalRoot)};
+                return ToolResult::succeeded(describeProjectArchitecture(canonicalRoot));
             }
             catch (const std::exception& exception) {
-                return {false, exception.what()};
+                return classifyProjectFileException(exception);
             }
         }
     );
