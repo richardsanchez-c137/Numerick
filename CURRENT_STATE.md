@@ -26,10 +26,12 @@
 | Working tree immediately after Phase 0 synchronization | `git status -sb` reported `## main...origin/main` with no changes |
 | PR #5 — final Phase 0 handoff | [PR #5](https://github.com/richardsanchez-c137/Numerick/pull/5), merged on 8 November 2026 |
 | PR #5 merge commit | `a81fc47ec87edd83aa7e2fa63ed79c30f98eeb4c` |
-| Current preparation branch | `docs/phase-1a-tool-execution-audit` |
-| Current HEAD / base commit | `a81fc47ec87edd83aa7e2fa63ed79c30f98eeb4c`; also referenced by local `main` and `origin/main` in the captured Git output |
-| Current working tree | Modified: `CURRENT_STATE.md`, `DECISIONS.md`, `NUMERICK_MASTER_CHECKLIST.md`, `ROADMAP.md`, `SESSION_LOG.md`; untracked: `PHASE1A_TOOL_EXECUTION_AUDIT.md` |
-| Preparation branch publication | Not committed, pushed, or merged; no PR opened |
+| PR #6 — Phase 1A tool execution audit | [PR #6](https://github.com/richardsanchez-c137/Numerick/pull/6), merged 8 November 2026 |
+| PR #6 merge commit | `c91a5829a85aa7b10539baedf29f95c912989426` |
+| Current working branch | `docs/phase-1a-toolresult-contract-design` |
+| Current HEAD / base commit | `c91a5829a85aa7b10539baedf29f95c912989426`; local `main` and `origin/main` point to this baseline |
+| Current working tree | Documentation in progress: `CURRENT_STATE.md`, `ROADMAP.md`, `NUMERICK_MASTER_CHECKLIST.md`, `SESSION_LOG.md`; untracked: `PHASE1A_TOOLRESULT_CONTRACT.md`; no production source changes |
+| Contract-design branch publication | Not yet committed or pushed; no PR opened |
 
 PR #3 merged three commits and 31 changed files, establishing the code baseline for Phase 0. PR #4 subsequently integrated the documentation closeout: eight files merged into `main` with merge commit `862761d514650a04c7a1f2b537fb23dbebf293ea`. PR #5 completed the Phase 0 handoff and merged into `main` with commit `a81fc47ec87edd83aa7e2fa63ed79c30f98eeb4c`.
 
@@ -137,13 +139,15 @@ This did not change the machine/user execution policy permanently. The native bu
 
 ## 6. Next work item
 
-**Phase 1A — Design and agree on the standard `ToolResult` contract.**
+**Phase 1A — Implement the approved standard `ToolResult` contract.**
 
-The existing tool-execution architecture has been inspected and documented in `PHASE1A_TOOL_EXECUTION_AUDIT.md` on branch `docs/phase-1a-tool-execution-audit`. The audit is documentation-only: no production source code was changed and no fresh build, runtime or CTest execution was performed for it.
+The Phase 1A architecture audit is integrated into `main` through PR #6. Its merge commit is `c91a5829a85aa7b10539baedf29f95c912989426`.
 
-The preparation branch is currently based on `a81fc47`, the final Phase 0 merge commit. Documentation changes are present in the working tree but have not yet been committed, pushed or merged.
+The approved design is documented in `PHASE1A_TOOLRESULT_CONTRACT.md` on branch `docs/phase-1a-toolresult-contract-design`. It defines five statuses, stable error codes, a private-state result class with factory methods, registry-owned execution metadata, safe error-message separation, agent accounting, and the migration/test sequence.
 
-Before changing the production interface, agree on the `ToolResult` fields and types, success/failure/rejection semantics, error taxonomy, human-readable messages, execution metadata, timeout/cancellation outcomes and corresponding test matrix. See `PHASE1A_TOOL_EXECUTION_AUDIT.md` and DEC-009.
+The current branch is documentation-only. No production source code has been changed and no fresh build or CTest run has been performed for the contract.
+
+Next: complete the contract-design documentation handoff, then create an implementation branch from the merged baseline. Begin with Step 1: implement the core result type, factories, name conversion and focused tests. Timeout and cancellation enforcement remain future work; permission confirmations remain Phase 1B.
 ## 7. Verification commands
 
 ```powershell
