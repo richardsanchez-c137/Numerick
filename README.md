@@ -2,14 +2,16 @@
 
 **A personal AI assistant built from the ground up in C++.**
 
-NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, and read-only tools with explicit access boundaries.
+NUMERICK is a Windows-focused command-line assistant using a local Ollama model. Its core emphasizes small, testable modules, bounded conversation context, user-managed persistent memory, scoped read-only project inspection and bounded Windows application launching.
 
-## Stable baseline — v1.2.0 | Voice Engine 2.0 in development
+## Stable baseline — v1.2.0 | Voice Engine 2.1 and Windows app launching integrated
 
 Implemented:
 - Local speech recognition using Whisper
-- Optional NVIDIA Qwen3-TTS custom speech synthesis through a Rust voice service
-- Windows SAPI fallback when the custom voice service is unavailable
+- Persistent NVIDIA Qwen3-TTS speech synthesis through a native NVIGI worker; Rust voice-service fallback retained
+- Continuous voice mode using local Whisper STT and Silero VAD; ESC ends the session
+- Windows SAPI fallback when custom speech output is unavailable
+- Windows open_application tool; Camera, Spotify, Notepad and Blender manually tested
 - C++17 command-line assistant
 - Local Qwen 3.5 4B integration through Ollama
 - `ask` and `agent` commands with bounded in-memory conversation history
@@ -45,58 +47,60 @@ exit
 
 ## Local voice engine
 
-NUMERICK supports spoken conversations through a hybrid C++ and Rust architecture.
+NUMERICK supports continuous spoken conversations through a C++ voice session and a persistent native NVIDIA speech worker when the local NVIDIA runtime is configured.
 
 ### Voice pipeline
 
 1. SDL2 captures microphone audio.
-2. Whisper transcribes the recording locally.
-3. The C++ conversation engine sends the transcription to the configured Ollama model.
-4. The Rust voice service invokes NVIDIA Qwen3-TTS.
-5. The generated WAV is played through Windows audio playback.
-6. Windows SAPI remains the fallback speech engine.
+2. Silero VAD detects speech and the end of an utterance.
+3. Whisper transcribes the utterance locally.
+4. The C++ conversation/agent layer sends the request to the configured local Ollama model and may invoke registered tools.
+5. The preferred speech path uses the persistent native NVIGI Qwen3-TTS worker. The Rust voice-service path is retained as a fallback; Windows SAPI is the final speech-output fallback.
+6. NUMERICK plays the response and returns to listening. Press `ESC` to end continuous voice mode.
 
 ### Voice components
 
 | Component | Responsibility |
 |---|---|
-| C++ | Microphone capture, transcription, conversation orchestration |
+| C++ continuous voice session | Microphone capture, VAD orchestration, transcription and conversation loop |
 | Whisper | Local speech-to-text |
-| Rust voice service | Validated speech-generation requests and NVIDIA process management |
-| NVIDIA Qwen3-TTS | Custom voice synthesis |
+| Silero VAD | Speech activity and utterance-end detection |
+| Ollama | Local assistant model and tool selection |
+| Native NVIGI worker | Persistent NVIDIA Qwen3-TTS synthesis using the configured CUDA path |
+| Rust voice service | Retained fallback service path |
 | Windows SAPI | Fallback speech synthesis |
 
-The custom voice configuration is optional and is loaded by `scripts/run-numerick.ps1`.
+`scripts/run-numerick.ps1` configures runtime paths and selects the native worker when its executable and required local assets are available. Otherwise, it can select the retained Rust service path; SAPI remains the speech-output fallback.
 
-The local setup expects the NVIDIA runtime package, its model files, a Rust release executable, and a speaker profile generated from the user's authorized reference recording.
+The development setup keeps the NVIDIA runtime pack, model files, speaker profile, reference recording/transcript, generated WAV files and diagnostic logs outside the Git repository. These are local/private assets and must not be committed.
 
-Private voice recordings, transcripts, speaker profiles, NVIDIA model weights, diagnostic logs, and generated audio must remain outside version control.
+### Build the native NVIDIA worker
 
-Without the optional custom voice assets, NUMERICK continues to use Windows SAPI.
+The native worker is built separately with the configured Visual Studio/MSVC x64 and NVIGI development environment:
 
-### Build and test the Rust service
+```powershell
+.\scripts\build-native-voice-worker.ps1
+```
+
+The script expects the local NVIDIA NVIGI package and its dependencies. It does not download or commit NVIDIA model weights or speaker assets.
+
+### Build and test the Rust fallback service
 
 From the repository root:
 
 ```powershell
 cargo test --locked --manifest-path .\voice-service\Cargo.toml
-
 cargo build --release --locked --manifest-path .\voice-service\Cargo.toml
 ```
-
-The Rust service uses the standard library and invokes the NVIDIA runtime as a separate process.
-
-The current implementation starts a new NVIDIA process for each speech request, so model initialization occurs for each utterance. Persistent inference and streaming playback are potential future improvements.
 
 ### Current voice limitations
 
 - No wake-word activation.
-- No real-time streaming speech generation.
-- No interruption or barge-in support.
-- The NVIDIA runtime and custom speaker profile require separate local installation.
-- The custom NVIDIA runtime is an experimental release candidate.
-
-
+- Reliable interruption/barge-in while NUMERICK is speaking is not implemented.
+- Push-to-talk and hands-free modes are not yet configurable as separate user settings.
+- Microphone device-loss, noisy-input and long-session recovery need additional testing.
+- The native Qwen generation limit is provisionally set to 384 new tokens after a runaway 2,048-frame generation; short and three-sentence manual tests passed, but longer-response quality/truncation still needs validation.
+- The NVIDIA runtime, model assets and custom speaker profile require separate local installation.
 ## Persistent memory
 
 Persistent memory is **opt-in**. NUMERICK does not automatically turn every conversation into permanent memory.
@@ -151,7 +155,7 @@ $env:NUMERICK_WORKSPACE_ROOT = "D:\GitHub\Projects\SomeOtherProject"
 .\build\numerick.exe
 ```
 
-The tools are read-only: there are no file-writing, deletion, process-execution, or arbitrary shell tools. They reject absolute paths and `..` traversal, verify resolved paths stay under the canonical workspace root, filter private directories such as `.git`, `build`, `data`, and `logs`, block common secret filenames and key/database/binary extensions, allowlist text file types, cap reads at 256 KiB, and cap returned content at 12 KiB. Files returned by these tools are marked as untrusted data in their tool response and the agent system prompt instructs the model not to follow instructions inside files.
+The workspace/project-inspection tools are read-only. A separate open_application tool can launch a constrained named Windows application; it does not provide arbitrary shell commands or general process/window control. They reject absolute paths and `..` traversal, verify resolved paths stay under the canonical workspace root, filter private directories such as `.git`, `build`, `data`, and `logs`, block common secret filenames and key/database/binary extensions, allowlist text file types, cap reads at 256 KiB, and cap returned content at 12 KiB. Files returned by these tools are marked as untrusted data in their tool response and the agent system prompt instructs the model not to follow instructions inside files.
 
 Search, symbol lookup, architecture inventory, component inspection, and member-relationship checks are bounded and read-only. Component inspection reuses the existing C++ identifier search and groups results with path/snippet heuristics; it does not resolve overloads, templates, aliases, or semantic call graphs, and bounded search may omit matches in very large workspaces.
 
@@ -207,8 +211,8 @@ The script removes only the selected in-repository build directory when `-Clean`
 - Memory context uses a character limit rather than a tokenizer-aware token budget.
 - JSON Schema validation supports only a subset of the standard.
 - Project file tools are read-only and intentionally exclude many paths and file types; they are not a substitute for a full security sandbox.
-- Only local-time and scoped, read-only workspace/codebase tools are registered. Arbitrary shell commands and computer control are not enabled.
-- Wake-word activation, real-time voice streaming, camera understanding, web research, and a graphical interface are not implemented.
+- open_application launches a tested subset of Windows applications; general window management, UI Automation, click/type/scroll workflows, dialog handling and arbitrary shell execution are not implemented.
+- Wake-word activation, barge-in, on-demand screen/camera/document perception, source-grounded web research and a graphical interface are not implemented.
 
 ## Project principles
 

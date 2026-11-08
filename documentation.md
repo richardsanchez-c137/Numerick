@@ -2,7 +2,7 @@
 
 **Project name:** NUMERICK  
 **Current version:** 1.2.0
-**Project stage:** Local AI assistant core with bounded memory, read-only codebase tools, component evidence reports, architecture inventory, and agent diagnostics
+**Project stage:** NUMERICK 1.2.0 with Voice Engine 2.1 integrated: continuous voice, persistent native NVIDIA Qwen3-TTS, bounded Windows application launching, agent tools and explicit local memory
 **Primary language:** C++  
 **Platform:** Windows  
 **Build system:** CMake; C++17; MSYS2 UCRT64 G++ development setup  
@@ -14,6 +14,8 @@
 
 ---
 
+
+> **Latest verified implementation snapshot — 8 November 2026:** PR #3 (`Voice engine 2.1 and Windows application control`) is merged into `main` at `0f2d64ae5bcde2b82e52c11f524d3b3f0f3bb8d7`. The current implementation includes continuous Whisper/Silero-VAD voice interaction, a persistent native NVIDIA NVIGI Qwen3-TTS worker (Rust service fallback retained; Windows SAPI speech fallback), a constrained `open_application` tool, and the existing C++ agent, read-only project inspection tools and explicit local memory. The project version remains `1.2.0`; “Voice Engine 2.1” is the integrated feature milestone, not a version-number change. Clean release verification on PR head `1bd57ae` completed with 54/54 targets and 11/11 CTest suites passing; Windows UCRT64 CI passed. See `CURRENT_STATE.md` for exact evidence and remaining limitations. The older milestone notes later in this file are historical records and must not override this latest snapshot.
 ## 1. Project Overview
 
 NUMERICK is a personal AI assistant being developed from scratch, with the long-term goal of creating a capable, context-aware assistant that can communicate naturally, understand visual information, remember relevant user preferences, research information, and perform everyday computer tasks.
@@ -1144,3 +1146,31 @@ CI does not require the NVIDIA runtime, private reference recording, speaker pro
 - Complete documentation and release checklist updates.
 - Perform a clean local build and final voice smoke test.
 - Review and merge the feature branch only after successful verification.
+
+## 2026-11-08 — Voice Engine 2.1 and Windows application launching
+
+### Integrated scope
+
+- Continuous voice interaction using local Whisper speech recognition and Silero VAD utterance detection.
+- Persistent native NVIDIA NVIGI Qwen3-TTS worker as the preferred speech output path, with the Rust voice-service path retained as a fallback and Windows SAPI as the speech-output fallback.
+- `open_application` tool for constrained Windows application launch. Camera, Spotify, Notepad and Blender were manually demonstrated in the development environment.
+- Native Qwen generation is provisionally capped at 384 new tokens after an observed runaway generation reached 2,048 frames (about 163.84 seconds of audio). A short joke and a three-sentence explanation passed manual voice regression tests after the cap was introduced. Longer-response tuning remains open.
+
+### Verification
+
+- Native NVIGI worker rebuilt successfully with Visual Studio 2026 MSVC x64.
+- Clean release verification on feature head `1bd57ae`: version consistency passed, 54/54 build targets completed, and 11/11 CTest suites passed.
+- Windows UCRT64 GitHub Actions checks passed for both push and PR events.
+- PR #3 merged into `main` at `0f2d64ae5bcde2b82e52c11f524d3b3f0f3bb8d7` on 8 November 2026.
+- Local `main` was fast-forwarded to `origin/main`; `git status -sb` reported a clean, synchronized branch.
+
+### Remaining limitations
+
+- No wake-word or reliable barge-in/interruption support.
+- General Windows UI Automation, window focus/close and semantic click/type/scroll workflows are not implemented.
+- The native speech-generation cap needs more testing with longer natural responses.
+- Tool-level timeouts/cancellation, structured error metadata and a permission/confirmation model remain Phase 1 work.
+
+### Next objective
+
+Close the Phase 0 continuity documentation and then begin Phase 1A: inspect and standardize the tool execution contract before changing its implementation.

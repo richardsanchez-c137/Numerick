@@ -1,3 +1,4 @@
+> **Historical document:** This checklist was written for the v1.0.0 release baseline. Its old feature/limitation statements are historical and are not a description of the current Voice Engine 2.1 baseline. For current implementation, test evidence and remaining work, see `CURRENT_STATE.md`, `ROADMAP.md` and `NUMERICK_MASTER_CHECKLIST.md`. Keep this historical record for provenance; do not use its unchecked v1.0.0 release items as the current milestone gate.
 # NUMERICK v1.0.0 — Release Readiness Checklist
 
 This checklist defines the evidence required before calling v1.0.0 release-ready. Do not mark a checkbox complete until the corresponding result has been observed.
