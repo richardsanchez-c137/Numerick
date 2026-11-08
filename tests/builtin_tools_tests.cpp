@@ -26,7 +26,7 @@ int main() {
            == false);
 
     // The tool must return a non-empty, correctly shaped timestamp.
-    const auto result = registry.execute(
+    const auto result = registry.executeLegacy(
         "get_local_time",
         Json::object()
     );
@@ -51,7 +51,7 @@ int main() {
     }
 
     // Extra arguments must be rejected.
-    const auto invalid = registry.execute(
+    const auto invalid = registry.executeLegacy(
         "get_local_time",
         {{"unexpected", "value"}}
     );

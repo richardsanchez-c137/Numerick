@@ -46,7 +46,7 @@ static LegacyToolResult call(
     const std::string& name,
     const Json& arguments
 ) {
-    return registry.execute(name, arguments);
+    return registry.executeLegacy(name, arguments);
 }
 
 static void testRegistersOnlyReadOnlyProjectTools() {

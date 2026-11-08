@@ -244,7 +244,7 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
             {"class_b", memberPairs[1].first},
             {"member_b", memberPairs[1].second}
         };
-        const LegacyToolResult relationship = registry_.execute(
+        const LegacyToolResult relationship = registry_.executeLegacy(
             "inspect_cpp_member_relationship", arguments
         );
 
@@ -429,14 +429,14 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
                         result = {false, mismatch};
                     }
                     else {
-                        result = registry_.execute(toolName, arguments);
+                        result = registry_.executeLegacy(toolName, arguments);
                     }
                     if (!result.success) {
                         memberRelationshipFailure = result.output;
                     }
                 }
                 else {
-                    result = registry_.execute(toolName, arguments);
+                    result = registry_.executeLegacy(toolName, arguments);
                 }
 
                 // Count a registry submission as processed even when

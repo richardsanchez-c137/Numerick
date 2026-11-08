@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "numerick/tool_result.hpp"
+
 #include <functional>
 #include <map>
 #include <string>
@@ -37,7 +39,13 @@ public:
 
     std::vector<ToolDefinition> definitions() const;
 
-    LegacyToolResult execute(
+    ToolResult execute(
+        const std::string& name,
+        const Json& arguments
+    ) const;
+
+    // Temporary compatibility adapter for unmigrated consumers.
+    LegacyToolResult executeLegacy(
         const std::string& name,
         const Json& arguments
     ) const;

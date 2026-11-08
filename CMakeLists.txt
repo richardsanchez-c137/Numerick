@@ -107,6 +107,7 @@ numerick_enable_warnings(tool_result_tests)
 add_test(NAME tool_result_tests COMMAND tool_result_tests)
 add_executable(tool_registry_tests
     tests/tool_registry_tests.cpp
+    src/core/tool_result.cpp
     src/tools/tool_registry.cpp
 )
 target_include_directories(tool_registry_tests PRIVATE include)
@@ -116,6 +117,7 @@ add_test(NAME tool_registry_tests COMMAND tool_registry_tests)
 add_executable(builtin_tools_tests
     tests/builtin_tools_tests.cpp
     src/tools/builtin_tools.cpp
+    src/core/tool_result.cpp
     src/tools/tool_registry.cpp
 )
 target_include_directories(builtin_tools_tests PRIVATE include)
@@ -126,6 +128,7 @@ add_test(NAME builtin_tools_tests COMMAND builtin_tools_tests)
 add_executable(tool_agent_tests
     tests/tool_agent_tests.cpp
     src/core/tool_agent.cpp
+    src/core/tool_result.cpp
     src/tools/tool_registry.cpp
 )
 target_include_directories(tool_agent_tests PRIVATE include)
@@ -143,6 +146,7 @@ add_test(NAME conversation_session_tests COMMAND conversation_session_tests)
 add_executable(tool_agent_conversation_tests
     tests/tool_agent_conversation_tests.cpp
     src/core/tool_agent.cpp
+    src/core/tool_result.cpp
     src/tools/tool_registry.cpp
 )
 target_include_directories(tool_agent_conversation_tests PRIVATE include)
@@ -161,6 +165,7 @@ add_test(NAME persistent_memory_tests COMMAND persistent_memory_tests)
 add_executable(project_file_tools_tests
     tests/project_file_tools_tests.cpp
     src/tools/project_file_tools.cpp
+    src/core/tool_result.cpp
     src/tools/tool_registry.cpp
 )
 target_include_directories(project_file_tools_tests PRIVATE include)
