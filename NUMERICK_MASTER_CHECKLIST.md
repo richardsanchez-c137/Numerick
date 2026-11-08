@@ -57,7 +57,7 @@ At the end of a session:
 
 ## 1. Current baseline — what we last had working
 
-**Baseline note:** Reconciled against `main` after PR #3 merged on 8 November 2026. Current hashes, commands and observed limits are recorded in `CURRENT_STATE.md`. Historical `[x]` labels still mean previously verified; consult the current snapshot for the exact verification date and evidence.
+**Baseline note:** Voice Engine 2.1 was merged by PR #3, and the Phase 0 documentation closeout was merged into `main` by PR #4 on 8 November 2026. The Phase 0 closeout merge commit is `862761d`. Current hashes, commands and observed limits are recorded in `CURRENT_STATE.md`. Historical `[x]` labels still mean previously verified; consult the current snapshot for the exact verification date and evidence.
 
 ### 1.1 Core application and agent
 
@@ -136,11 +136,11 @@ At the end of a session:
 - [x] Run manual voice regressions for a short joke and three-sentence explanation after the native TTS cap change.
 - [x] Confirm the four known app-launch cases: Camera, Spotify, Notepad and Blender (manual checks from the integration work).
 - [x] Record machine-specific runtime assets, PowerShell execution-policy assumption, native worker build warning and remaining test gaps.
-- [x] Add/maintain `CURRENT_STATE.md` with verified facts, not aspirations (documentation branch; PR integration pending).
-- [x] Add/maintain `DECISIONS.md` for architecture choices and trade-offs (documentation branch; PR integration pending).
-- [x] Add/maintain `ROADMAP.md` and `SESSION_LOG.md` (documentation branch; PR integration pending).
+- [x] Add/maintain `CURRENT_STATE.md` with verified facts, not aspirations (integrated into `main` through PR #4).
+- [x] Add/maintain `DECISIONS.md` for architecture choices and trade-offs (integrated into `main` through PR #4).
+- [x] Add/maintain `ROADMAP.md` and `SESSION_LOG.md` (integrated into `main` through PR #4).
 
-**Exit criteria:** Technical baseline, remote/PR/merge state and tests are known. The Phase 0 documentation closeout is prepared on a dedicated branch and becomes fully integrated when its PR is merged. Do not start implementation work in Phase 1 until the documentation closeout is integrated and the current work item is updated.
+**Exit criteria:** Technical baseline, remote/PR/merge state and tests are known. The Phase 0 documentation set is integrated into `main` through PR #4. The current work item is now Phase 1A.
 ## Phase 1 — Reliability, safety and tool foundations
 
 **Goal:** Make every current and future capability predictable, observable and safe to invoke.
@@ -658,12 +658,12 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 
 > Update this panel whenever the active task changes. There must be only one active work item.
 
-- **Current phase:** Phase 0 — Reconcile and protect the current baseline (documentation closeout).
-- **Current work item:** Integrate the Phase 0 documentation bundle (`CURRENT_STATE.md`, `DECISIONS.md`, `ROADMAP.md`, `SESSION_LOG.md`, this checklist, and corrected current README/documentation text) through a reviewed documentation PR.
-- **Status:** `[~]` Technical baseline is verified and documentation is prepared; this closeout is complete only after the documentation branch is merged into `main`.
-- **Expected deliverable:** A root-level, source-controlled verified baseline record and aligned project documentation, with a clean local `main` after merge.
-- **Acceptance evidence to record:** Documentation diff review, `git diff --check`, successful documentation PR merge, `git pull --ff-only origin main`, and clean `git status -sb`.
-- **Do not assume:** The documentation closeout branch has already been merged; Phase 1A implementation has started; Windows UI Automation is available; NUMERICK can close applications or control arbitrary windows.
+- **Current phase:** Phase 1 — Reliability, safety and tool foundations.
+- **Current work item:** Phase 1A — Inspect and document the existing tool execution contract before proposing interface changes.
+- **Status:** `[ ]` Phase 1A has not started. The first task is inspection and documentation only; no interface redesign has begun.
+- **Expected deliverable:** A concise, code-grounded map of the current `ToolRegistry`, tool definitions, handlers and `ToolAgent` execution path, including identified gaps.
+- **Acceptance evidence to record:** Identify relevant source files and symbols; document `ToolResult`, schema validation, handler exceptions, unknown-tool behavior, agent call/round limits and existing diagnostics; identify relevant tests.
+- **Do not assume:** Structured permissions, per-tool timeout/cancellation, broad Windows UI Automation or verified multi-step task execution already exist.
 
 ## Next work item after Phase 0
 

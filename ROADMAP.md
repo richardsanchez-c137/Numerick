@@ -16,7 +16,7 @@ The C++17 application remains the core. The architecture is local-first where pr
 
 | Milestone / phase | Scope | Status |
 |---|---|---|
-| Phase 0 | Reconcile baseline, verify build/tests/voice/app tests, document current state | Technical checks complete; documentation closeout branch awaiting integration |
+| Phase 0 | Reconcile baseline, verify build/tests/voice/app tests, document current state | Complete; documentation integrated by PR #4 |
 | Voice Engine 2.1 | Continuous Whisper/VAD voice, persistent native NVIDIA Qwen3-TTS, speech fallback, Windows app launching | Merged in PR #3 |
 | Phase 1A | Standard tool execution contract | Next implementation task |
 | Phase 1B | Permission levels and confirmation rules | Planned; depends on Phase 1A design |
@@ -50,4 +50,4 @@ The C++17 application remains the core. The architecture is local-first where pr
 
 ## Current next step
 
-Close the Phase 0 documentation record. After its documentation PR is merged, start **Phase 1A — Standardize the tool execution contract** by inspecting the existing `ToolRegistry`, handlers and `ToolAgent` path before changing implementation.
+Phase 0 is complete. Its documentation closeout was merged through PR #4 on 8 November 2026. Begin **Phase 1A — Standardize the tool execution contract** by inspecting the existing `ToolRegistry`, handlers and `ToolAgent` path before changing implementation.
