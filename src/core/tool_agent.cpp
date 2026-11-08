@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "numerick/tool_result.hpp"
 
 namespace numerick {
 namespace {
@@ -149,6 +150,39 @@ void captureTurnMessages(
     }
 }
 
+void recordToolResult(
+    AgentRunReport& report,
+    const std::string& toolName,
+    const ToolResult& result
+) {
+    switch (result.status()) {
+        case ToolStatus::Succeeded:
+            ++report.toolCallsSucceeded;
+            break;
+
+        case ToolStatus::Failed:
+            ++report.toolCallsFailed;
+            break;
+
+        case ToolStatus::Rejected:
+            ++report.toolCallsRejected;
+            break;
+
+        case ToolStatus::TimedOut:
+            ++report.toolCallsTimedOut;
+            break;
+
+        case ToolStatus::Cancelled:
+            ++report.toolCallsCancelled;
+            break;
+    }
+
+    report.toolCalls.push_back({
+        toolName,
+        std::string(toolStatusName(result.status()))
+    });
+}
+
 } // namespace
 
 ToolAgent::ToolAgent(
@@ -228,7 +262,7 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
     Json messages = conversationMessages;
     const std::size_t initialMessageCount = messages.size();
 
-    std::size_t processedCalls = 0;
+
     std::string memberRelationshipFailure;
 
     // Narrow, deterministic routing for explicit C++ member-relationship questions.
@@ -244,24 +278,24 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
             {"class_b", memberPairs[1].first},
             {"member_b", memberPairs[1].second}
         };
-        const LegacyToolResult relationship = registry_.executeLegacy(
+        const ToolResult relationship = registry_.execute(
             "inspect_cpp_member_relationship", arguments
         );
 
         report.toolCallsRequested = 1;
-        report.toolCalls.push_back({
+        recordToolResult(
+            report,
             "inspect_cpp_member_relationship",
-            relationship.success ? "succeeded" : "failed"
-        });
-        if (relationship.success) {
-            report.toolCallsSucceeded = 1;
-            report.answer = relationship.output;
+            relationship
+        );
+
+        if (relationship.status() == ToolStatus::Succeeded) {
+            report.answer = relationship.output();
         }
         else {
-            report.toolCallsFailed = 1;
             report.answer =
                 "NUMERICK could not verify the requested C++ member relationship. " +
-                relationship.output;
+                relationship.errorMessage();
         }
 
         // This targeted path doesn't ask the model to paraphrase source evidence.
@@ -352,6 +386,8 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
             return report;
         }
 
+        const std::size_t processedCalls = report.toolCallsProcessed();
+
         if (processedCalls > maxToolCalls_ ||
             requestedCalls.size() > maxToolCalls_ - processedCalls) {
             report.stopReason = AgentStopReason::ToolCallLimitReached;
@@ -381,12 +417,6 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
 
         for (const Json& call : requestedCalls) {
             std::string toolName = "__invalid_tool_call__";
-            std::string outcome = "rejected";
-            LegacyToolResult result{
-                false,
-                "Malformed tool request."
-            };
-
             bool wellFormed = false;
 
             if (call.is_object() &&
@@ -405,49 +435,37 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
                 }
             }
 
-            if (!wellFormed) {
-                outcome = "malformed";
-                ++report.toolCallsRejected;
-                result.output =
-                    "The tool request was malformed. "
-                    "A string name and object arguments are required.";
-            }
-            else if (!registry_.contains(toolName)) {
-                outcome = "rejected";
-                ++report.toolCallsRejected;
-                result.output =
-                    "Tool is not registered: " + toolName;
-            }
-            else {
+            ToolResult result = ToolResult::rejected(
+                ToolErrorCode::MalformedRequest,
+                "The tool request was malformed. "
+                "A string name and object arguments are required."
+            );
+
+            if (wellFormed) {
                 const Json& arguments = call["function"]["arguments"];
+
                 if (toolName == "inspect_cpp_member_relationship") {
                     const std::string mismatch = relationshipArgumentMismatch(
                         arguments,
                         lastMessage["content"].get<std::string>()
                     );
+
                     if (!mismatch.empty()) {
-                        result = {false, mismatch};
+                        result = ToolResult::rejected(
+                            ToolErrorCode::InvalidArguments,
+                            mismatch
+                        );
                     }
                     else {
-                        result = registry_.executeLegacy(toolName, arguments);
+                        result = registry_.execute(toolName, arguments);
                     }
-                    if (!result.success) {
-                        memberRelationshipFailure = result.output;
-                    }
-                }
-                else {
-                    result = registry_.executeLegacy(toolName, arguments);
-                }
 
-                // Count a registry submission as processed even when
-                // schema validation or the handler rejects it.
-                if (result.success) {
-                    outcome = "succeeded";
-                    ++report.toolCallsSucceeded;
+                    if (result.status() != ToolStatus::Succeeded) {
+                        memberRelationshipFailure = result.errorMessage();
+                    }
                 }
                 else {
-                    outcome = "failed";
-                    ++report.toolCallsFailed;
+                    result = registry_.execute(toolName, arguments);
                 }
             }
 
@@ -455,20 +473,21 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
                 {"role", "tool"},
                 {"tool_name", toolName},
                 {"content",
-                    result.success
-                        ? result.output
-                        : "Tool error: " + result.output
+                    result.status() == ToolStatus::Succeeded
+                        ? result.output()
+                        : "Tool error: " + result.errorMessage()
                 }
             });
 
-            report.toolCalls.push_back({toolName, outcome});
-            ++processedCalls;
+            recordToolResult(report, toolName, result);
 
             // This tool produces a bounded, evidence-bearing report intended to be the
             // answer. Return it directly so the model cannot contradict the source evidence
             // while paraphrasing it (for example, saying "separate objects" for a reference).
-            if (toolName == "inspect_cpp_member_relationship" && result.success) {
-                report.answer = result.output;
+            if (toolName == "inspect_cpp_member_relationship" &&
+                result.status() == ToolStatus::Succeeded) {
+
+                report.answer = result.output();
                 messages.push_back({
                     {"role", "assistant"},
                     {"content", report.answer}

@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+
 namespace numerick {
 
 class ChatClient;
@@ -30,6 +31,21 @@ struct AgentRunReport {
     std::size_t toolCallsSucceeded = 0;
     std::size_t toolCallsFailed = 0;
     std::size_t toolCallsRejected = 0;
+    std::size_t toolCallsTimedOut = 0;
+    std::size_t toolCallsCancelled = 0;
+
+    // Derived accounting: these are intentionally not stored.
+    std::size_t toolCallsProcessed() const noexcept {
+        return toolCallsSucceeded +
+            toolCallsFailed +
+            toolCallsRejected +
+            toolCallsTimedOut +
+            toolCallsCancelled;
+    }
+
+    std::size_t toolCallsNotExecuted() const noexcept {
+        return toolCallsRequested - toolCallsProcessed();
+    }
     AgentStopReason stopReason = AgentStopReason::Completed;
     std::vector<ToolCallDiagnostic> toolCalls;
 
