@@ -10,15 +10,15 @@
 
 Build a dependable, permission-aware, voice-first Windows AI companion. NUMERICK should understand user intent, use bounded tools, verify observable outcomes, remember explicitly approved context, and operate selected desktop workflows while keeping the user in control.
 
-The C++17 application remains the core. The architecture is local-first where practical, with explicitly configured external/remote capabilities only when justified. Private model assets, speaker recordings/profiles, generated audio and runtime diagnostics stay outside version control.
+The existing core application remains C++17. New components may use the language that best fits their reliability, development speed, maintainability and ecosystem needs, with boundaries documented under DEC-009. The architecture is local-first where practical, with explicitly configured external/remote capabilities only when justified. Private model assets, speaker recordings/profiles, generated audio and runtime diagnostics stay outside version control.
 
 ## Milestone status
 
 | Milestone / phase | Scope | Status |
 |---|---|---|
-| Phase 0 | Reconcile baseline, verify build/tests/voice/app tests, document current state | Complete; documentation integrated by PR #4 |
+| Phase 0 | Reconcile baseline, verify build/tests/voice/app tests, document current state | Complete; final documentation handoff merged through PR #4 and PR #5 |
 | Voice Engine 2.1 | Continuous Whisper/VAD voice, persistent native NVIDIA Qwen3-TTS, speech fallback, Windows app launching | Merged in PR #3 |
-| Phase 1A | Standard tool execution contract | Next implementation task |
+| Phase 1A | Audit existing tool execution and design the standard tool contract | Audit documented on preparation branch; contract design next, not yet merged |
 | Phase 1B | Permission levels and confirmation rules | Planned; depends on Phase 1A design |
 | Phase 1C | Structured diagnostics, health checks, recovery and worker lifecycle | Planned |
 
@@ -50,4 +50,6 @@ The C++17 application remains the core. The architecture is local-first where pr
 
 ## Current next step
 
-Phase 0 is complete. Its documentation closeout was merged through PR #4 on 8 November 2026. Begin **Phase 1A — Standardize the tool execution contract** by inspecting the existing `ToolRegistry`, handlers and `ToolAgent` path before changing implementation.
+Phase 0 is complete. Its final documentation handoff was merged through PR #5 on 8 November 2026 (merge commit `a81fc47`). The existing tool-execution architecture has been inspected and documented in `PHASE1A_TOOL_EXECUTION_AUDIT.md` on branch `docs/phase-1a-tool-execution-audit`. This audit work is documentation-only; production source implementation has not started, and the preparation branch has not yet been committed, pushed or merged.
+
+The next task is **Phase 1A — Design and agree on the standard `ToolResult` contract** before modifying source code. The design must cover structured outcomes, error semantics, execution metadata, timeout and cancellation outcomes, and the corresponding test requirements.

@@ -67,6 +67,13 @@
 - **Rationale:** These are separate facts and must not be inferred from one another.
 - **Consequences:** `CURRENT_STATE.md` is a verified snapshot; `SESSION_LOG.md` is evidence of work sessions; the master checklist records intended scope. Update all records when new evidence changes the state.
 
+## DEC-009 — Choose implementation languages per component
+
+- **Date recorded:** 2026-11-08
+- **Status:** Adopted
+- **Decision:** NUMERICK may use any suitable programming language when it materially improves development speed, reliability, maintainability or access to a strong ecosystem. C++ remains the existing application core, not a mandatory language for every future component. Python is an option for AI/ML, prototyping, automation and orchestration. Rust remains appropriate for isolated services and workers where its safety and concurrency properties justify the boundary. Other languages may be considered case by case.
+- **Rationale:** A language restriction should not slow development or force a poor technical fit. Different components have different performance, ecosystem, integration and maintenance needs.
+- **Consequences:** Choose languages per component and record the reasoning. Evaluate packaging, dependency management, runtime overhead, security, debugging, resource use and interoperability. Keep cross-language boundaries narrow and documented through IPC, service protocols, FFI or library interfaces. Do not rewrite stable components solely to change languages; new components must remain testable, observable and maintainable.
 ## Pending decisions
 
 - Tool result/error schema and execution metadata contract (Phase 1A).
