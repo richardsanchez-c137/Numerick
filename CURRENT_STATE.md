@@ -12,17 +12,20 @@
 
 | Item | Verified state |
 |---|---|
-| Local branch after closeout baseline | `main` |
+| Local branch at Phase 0 closeout synchronization | `main` |
 | Remote branch | `origin/main` |
-| Latest `main` commit | `0f2d64ae5bcde2b82e52c11f524d3b3f0f3bb8d7` |
+| Main commit at Phase 0 documentation closeout | `862761d514650a04c7a1f2b537fb23dbebf293ea` |
 | Merge request | [PR #3 — Voice engine 2.1 and Windows application control](https://github.com/richardsanchez-c137/Numerick/pull/3) |
 | PR state | Merged on 8 November 2026 |
+| Phase 0 documentation PR | [PR #4 — docs: close out phase 0 project baseline](https://github.com/richardsanchez-c137/Numerick/pull/4) |
+| PR #4 state | Merged on 8 November 2026 |
+| PR #4 merge commit | `862761d514650a04c7a1f2b537fb23dbebf293ea` |
 | PR head | `1bd57ae576b0cf4a3e26215f378515e9f3900e60` |
 | Merge method/result | Merge commit `0f2d64ae5bcde2b82e52c11f524d3b3f0f3bb8d7` |
 | Local synchronization | `git pull --ff-only origin main` completed successfully |
 | Working tree | `git status -sb` reported `## main...origin/main` with no changes |
 
-PR #3 merged three commits and 31 changed files. The feature branch was three commits ahead of `main` before merge; the resulting merge commit is now the local and remote `main` baseline.
+PR #3 merged three commits and 31 changed files, establishing the code baseline for Phase 0. PR #4 subsequently integrated the documentation closeout: eight files merged into `main` with merge commit `862761d514650a04c7a1f2b537fb23dbebf293ea`.
 
 ## 2. Implemented capabilities with current evidence
 
