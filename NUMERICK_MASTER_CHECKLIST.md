@@ -147,13 +147,13 @@ At the end of a session:
 
 ### 1A. Tool execution contract
 
-- [ ] Standard tool result structure: success/failure, data, error code, human-readable message and execution metadata.
-- [ ] Validate tool arguments before execution.
-- [ ] Per-tool timeout and cancellation support.
-- [ ] Standard handling for unavailable apps, missing files, permission failures and external-service failures.
-- [ ] Avoid leaking raw exceptions or internal paths into user-facing answers.
-- [ ] Record tool name, arguments (with secrets redacted), start/end time, result and failure reason.
-- [ ] Add tests for invalid arguments, timeouts, repeated calls and tool failures.
+- [x] Standard tool result structure: structured status, output, stable error code, safe human-readable message, internal diagnostic details and execution metadata. Implemented in PR #8.
+- [x] Validate tool arguments before execution. Registry schema validation is retained and structured rejections are returned.
+- [ ] Per-tool timeout and cancellation support. Status types exist, but enforcement is not implemented.
+- [~] Standard handling for unavailable apps, missing files, permission failures and external-service failures. Specific mappings exist for migrated tools; complete coverage remains open.
+- [x] Avoid leaking raw exceptions or internal diagnostic details into model-facing tool responses.
+- [ ] Record tool name, arguments with secrets redacted, start/end time, result and failure reason in structured execution logs.
+- [~] Add tests for invalid arguments, repeated calls, timeouts and tool failures. Invalid arguments and tool failures are covered; timeout and repeated-call coverage remains open.
 
 ### 1B. Permission and confirmation model
 
@@ -659,18 +659,29 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 > Update this panel whenever the active task changes. There must be only one active work item.
 
 - **Current phase:** Phase 1 — Reliability, safety and tool foundations.
-- **Current work item:** Phase 1A — Implement the approved `ToolResult` contract, beginning with the core result type.
-- **Status:** `[x]` Architecture audit merged in PR #6. ToolResult contract approved and documented in `PHASE1A_TOOLRESULT_CONTRACT.md`. No production source implementation has started.
-- **Expected deliverable:** Implemented structured result types, factory invariants, registry-owned execution metadata, consistent ToolAgent outcomes, migrated handlers, and regression tests.
-- **Acceptance evidence to record:** Build and test results for each implementation step; factory invariant tests; registry timing and handler-invocation tests; all-status agent accounting; conversation compatibility; and preserved successful tool outputs.
-- **Guardrails:** Follow `PHASE1A_TOOLRESULT_CONTRACT.md`. Do not claim timeout or cancellation enforcement before it exists and is tested. Permission and confirmation design remains Phase 1B. Avoid unrelated refactoring.
+- **Current work item:** Phase 1A — Step 4: ToolAgent integration.
+- **Status:** Steps 1–3 implemented, tested, committed, pushed and merged through PR #8. Step 4 is the only active implementation item.
+- **Implementation branch:** `feat/phase-1a-toolagent-integration`.
+- **Base commit:** `4355d9d` — PR #8 merge into `main`.
+- **Expected deliverable:** ToolAgent consumes native structured ToolResult outcomes, classifies all five statuses, maintains mutually exclusive outcome counters, derives processed/not-executed accounting, and correctly accounts for early returns.
+- **Files/modules in scope:** `include/numerick/tool_agent.hpp`, `src/core/tool_agent.cpp`, `tests/tool_agent_tests.cpp`, and `tests/tool_agent_conversation_tests.cpp`.
+- **Dependencies:** Approved `PHASE1A_TOOLRESULT_CONTRACT.md`; Steps 1–3 are merged into main.
+- **Test procedure:** Relevant ToolAgent and conversation tests after each change, followed by full CTest verification.
+- **Acceptance evidence:** All five statuses handled separately; correct error messages in tool conversation messages; counter equations hold; unexecuted calls are not assigned fabricated outcomes; deterministic relationship routing uses structured results; existing successful outputs and Ollama conversation compatibility are preserved.
+- **Guardrails:** Do not claim timeout or cancellation enforcement. Keep diagnostic details out of model-facing messages. Do not remove `LegacyToolResult` or `executeLegacy()` until all remaining consumers and tests have been migrated. Permission and confirmation policy remains a separate Phase 1B work item.
 
 ## Phase 1A work sequence
 
 - [x] Inspect and document the existing tool execution architecture in `PHASE1A_TOOL_EXECUTION_AUDIT.md` (merged through PR #6).
 - [x] Design and approve the standard `ToolResult` contract in `PHASE1A_TOOLRESULT_CONTRACT.md`.
 - [x] Define the incremental implementation sequence and test requirements in the approved contract.
-- [ ] Implement Step 1: core result types, factory methods, name conversion and focused unit tests.
+- [x] **Step 1 – Core result type:** Implement statuses, error codes, private-state result class, factories, name conversion and focused tests. Commit `c510abe`.
+- [x] **Step 2 – Tool registry:** Return structured outcomes, attach registry-owned duration and handler-invocation metadata, and distinguish validation, unknown-tool and execution failures. Commit `ccee489`.
+- [x] **Step 3 – Existing tool migration:** Migrate built-in, application and all seven project-file handlers. Commits `94c1033` and `ce721a2`.
+- [ ] **Step 4 – ToolAgent integration (CURRENT ACTIVE ITEM):** Migrate both deterministic and model-directed execution paths; classify all five statuses; add timeout/cancellation counters; implement derived processed/not-executed accounting and early-return handling.
+- [ ] **Step 5 – Diagnostics and conversation compatibility:** Add typed per-tool diagnostics with status, error code, duration and handler-invocation state. Preserve the Ollama tool-message protocol and keep internal diagnostics private.
+- [ ] **Step 6 – Regression tests:** Cover all five statuses, counter equations, early returns, conversation compatibility and successful output preservation.
+- [ ] **Step 7 – Integration verification:** Build, run complete CTest, perform appropriate manual checks and update project records with verified evidence.
 
 ---
 # 5. Supporting project records

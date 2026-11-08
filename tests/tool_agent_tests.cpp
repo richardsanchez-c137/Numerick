@@ -2,6 +2,7 @@
 #include "numerick/chat_client.hpp"
 #include "numerick/tool_agent.hpp"
 #include "numerick/tool_registry.hpp"
+#include "numerick/tool_result.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -232,13 +233,13 @@ static void testMalformedArgumentsAreRejected() {
     ToolAgent agent(ai, registry);
 
     const auto report =
-        agent.runWithDiagnostics("Test malformed arguments.");
+        agent.runWithDiagnostics("Test rejected arguments.");
 
     assert(report.answer == "The tool request was invalid.");
     assert(report.toolCallsRejected == 1);
     assert(report.toolCallsSucceeded == 0);
     assert(report.toolCalls.size() == 1);
-    assert(report.toolCalls[0].outcome == "malformed");
+    assert(report.toolCalls[0].outcome == "rejected");
 
     assert(executionCount == 0);
 
@@ -273,11 +274,11 @@ static void testSchemaFailureIsReported() {
         report.answer ==
         "The required tool argument was missing."
     );
-    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsRejected == 1);
     assert(report.toolCallsSucceeded == 0);
-    assert(report.toolCallsRejected == 0);
+    assert(report.toolCallsFailed == 0);
     assert(report.toolCalls.size() == 1);
-    assert(report.toolCalls[0].outcome == "failed");
+    assert(report.toolCalls[0].outcome == "rejected");
 
     assert(executionCount == 0);
 
@@ -337,7 +338,7 @@ static void testHandlerFailureIsReported() {
     );
 }
 
-// 6. A malformed model response must fail safely.
+// 6. A rejected model response must fail safely.
 static void testMalformedModelResponseIsRejected() {
     ToolRegistry registry;
 
@@ -356,7 +357,7 @@ static void testMalformedModelResponseIsRejected() {
     bool rejected = false;
 
     try {
-        agent.run("Test a malformed model response.");
+        agent.run("Test a rejected model response.");
     }
     catch (const std::runtime_error&) {
         rejected = true;
@@ -497,10 +498,11 @@ static void testRelationshipToolResultIsReturnedDirectlyAndRejectsWrongClass() {
     assert(report.modelRequests == 2);
     assert(report.toolRounds == 2);
     assert(report.toolCallsRequested == 2);
-    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsRejected == 1);
+    assert(report.toolCallsFailed == 0);
     assert(report.toolCallsSucceeded == 1);
     assert(report.toolCalls.size() == 2);
-    assert(report.toolCalls[0].outcome == "failed");
+    assert(report.toolCalls[0].outcome == "rejected");
     assert(report.toolCalls[1].outcome == "succeeded");
     assert(executionCount == 1);
     assert(ai.seenMessages.size() == 2);
@@ -535,7 +537,7 @@ static void testFailedRelationshipInspectionDoesNotPermitGenericGuess() {
 
     assert(report.answer.find("could not verify") != std::string::npos);
     assert(report.answer.find("They are separate objects") == std::string::npos);
-    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsRejected == 1);
     assert(report.toolCallsSucceeded == 0);
     assert(executionCount == 0);
 }
@@ -629,6 +631,148 @@ static void testDirectAnswerDoesNotInvokeTools() {
     assert(executionCount == 0);
 }
 
+static void testAllStructuredStatusesAreCounted() {
+    ToolRegistry registry;
+
+    registry.registerTool(
+        {"native_success", "Successful test tool.", {{"type", "object"}}},
+        [](const Json&) {
+            return numerick::ToolResult::succeeded("success output");
+        }
+    );
+
+    registry.registerTool(
+        {"native_failure", "Failed test tool.", {{"type", "object"}}},
+        [](const Json&) {
+            return numerick::ToolResult::failed(
+                numerick::ToolErrorCode::ExecutionFailed,
+                "Expected operational failure."
+            );
+        }
+    );
+
+    registry.registerTool(
+        {"native_rejection", "Rejected test tool.", {{"type", "object"}}},
+        [](const Json&) {
+            return numerick::ToolResult::rejected(
+                numerick::ToolErrorCode::PermissionDenied,
+                "Permission denied."
+            );
+        }
+    );
+
+    registry.registerTool(
+        {"native_timeout", "Timeout test tool.", {{"type", "object"}}},
+        [](const Json&) {
+            return numerick::ToolResult::timedOut("Test timeout.");
+        }
+    );
+
+    registry.registerTool(
+        {"native_cancel", "Cancellation test tool.", {{"type", "object"}}},
+        [](const Json&) {
+            return numerick::ToolResult::cancelled("Test cancellation.");
+        }
+    );
+
+    FakeChatClient ai({
+        toolRequest(Json::array({
+            makeToolCall("native_success", Json::object(), "call_1"),
+            makeToolCall("native_failure", Json::object(), "call_2"),
+            makeToolCall("native_rejection", Json::object(), "call_3"),
+            makeToolCall("native_timeout", Json::object(), "call_4"),
+            makeToolCall("native_cancel", Json::object(), "call_5")
+        })),
+        finalAnswer("All outcomes were processed.")
+    });
+
+    ToolAgent agent(ai, registry, 3, 5);
+    const auto report = agent.runWithDiagnostics(
+        "Execute all five structured outcome tests."
+    );
+
+    assert(report.toolCallsRequested == 5);
+
+    assert(report.toolCallsSucceeded == 1);
+    assert(report.toolCallsFailed == 1);
+    assert(report.toolCallsRejected == 1);
+    assert(report.toolCallsTimedOut == 1);
+    assert(report.toolCallsCancelled == 1);
+
+    assert(report.toolCallsProcessed() == 5);
+    assert(report.toolCallsNotExecuted() == 0);
+
+    assert(
+        report.toolCallsRequested ==
+        report.toolCallsProcessed() + report.toolCallsNotExecuted()
+    );
+
+    assert(report.toolCalls.size() == 5);
+    assert(report.toolCalls[0].outcome == "succeeded");
+    assert(report.toolCalls[1].outcome == "failed");
+    assert(report.toolCalls[2].outcome == "rejected");
+    assert(report.toolCalls[3].outcome == "timed_out");
+    assert(report.toolCalls[4].outcome == "cancelled");
+}
+
+static void testSuccessfulRelationshipEarlyReturnAccountsRemainingCalls() {
+    ToolRegistry registry;
+
+    int relationshipExecutions = 0;
+    int echoExecutions = 0;
+
+    registerRelationshipEvidenceTool(
+        registry,
+        &relationshipExecutions,
+        "Verified relationship evidence."
+    );
+
+    registerEchoTool(registry, &echoExecutions);
+
+    FakeChatClient ai({
+        toolRequest(Json::array({
+            makeToolCall(
+                "inspect_cpp_member_relationship",
+                {
+                    {"class_a", "Owner"},
+                    {"member_a", "registry_"},
+                    {"class_b", "ToolAgent"},
+                    {"member_b", "registry_"}
+                },
+                "call_relationship"
+            ),
+            makeToolCall(
+                "echo_text",
+                {{"text", "This must not execute."}},
+                "call_echo"
+            )
+        }))
+    });
+
+    ToolAgent agent(ai, registry);
+
+    const auto report = agent.runWithDiagnostics(
+        "Please inspect Owner's registry_ and ToolAgent's registry_ in this code."
+    );
+
+    assert(report.answer == "Verified relationship evidence.");
+
+    assert(report.toolCallsRequested == 2);
+    assert(report.toolCallsProcessed() == 1);
+    assert(report.toolCallsNotExecuted() == 1);
+
+    assert(report.toolCallsSucceeded == 1);
+    assert(report.toolCallsFailed == 0);
+    assert(report.toolCallsRejected == 0);
+
+    assert(relationshipExecutions == 1);
+    assert(echoExecutions == 0);
+
+    assert(
+        report.toolCallsRequested ==
+        report.toolCallsProcessed() + report.toolCallsNotExecuted()
+    );
+}
 
 int main() {
     testSuccessfulToolCycle();
@@ -645,6 +789,8 @@ int main() {
     testRelationshipPromptRoutesBeforeModel();
     testNonRelationshipPromptDoesNotUseDeterministicRouter();
     testDirectAnswerDoesNotInvokeTools();
+    testAllStructuredStatusesAreCounted();
+    testSuccessfulRelationshipEarlyReturnAccountsRemainingCalls();
 
     std::cout << "All tool agent tests passed.\n";
     return 0;
