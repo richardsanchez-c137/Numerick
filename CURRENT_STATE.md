@@ -3,7 +3,7 @@
 **Verified snapshot:** 8 November 2026<br>
 **Repository:** https://github.com/richardsanchez-c137/Numerick<br>
 **Project version:** `1.2.0`<br>
-**Feature milestone:** Voice Engine 2.1 and Windows application launching<br>
+**Feature milestone:** Phase 1A — ToolResult execution foundation; ToolAgent integration in progress<br>
 **Primary platform:** Windows<br>
 **Core language/build:** Existing C++17 core / CMake; component languages selected by technical fit (DEC-009)<br>
 **Status authority:** This file records observed repository, build, test and manual-run evidence. Planned capabilities are not described as implemented.
@@ -12,28 +12,21 @@
 
 | Item | Verified state |
 |---|---|
-| Historical local branch at Phase 0 closeout synchronization | `main` |
-| Remote branch | `origin/main` |
-| PR #4 documentation closeout merge commit | `862761d514650a04c7a1f2b537fb23dbebf293ea` |
-| Merge request | [PR #3 — Voice engine 2.1 and Windows application control](https://github.com/richardsanchez-c137/Numerick/pull/3) |
-| PR state | Merged on 8 November 2026 |
-| Phase 0 documentation PR | [PR #4 — docs: close out phase 0 project baseline](https://github.com/richardsanchez-c137/Numerick/pull/4) |
-| PR #4 state | Merged on 8 November 2026 |
-| PR #4 merge commit | `862761d514650a04c7a1f2b537fb23dbebf293ea` |
-| PR head | `1bd57ae576b0cf4a3e26215f378515e9f3900e60` |
-| Merge method/result | Merge commit `0f2d64ae5bcde2b82e52c11f524d3b3f0f3bb8d7` |
-| Phase 0 main synchronization | `git pull --ff-only origin main` completed successfully before the preparation branch was created |
-| Working tree immediately after Phase 0 synchronization | `git status -sb` reported `## main...origin/main` with no changes |
-| PR #5 — final Phase 0 handoff | [PR #5](https://github.com/richardsanchez-c137/Numerick/pull/5), merged on 8 November 2026 |
-| PR #5 merge commit | `a81fc47ec87edd83aa7e2fa63ed79c30f98eeb4c` |
-| PR #6 — Phase 1A tool execution audit | [PR #6](https://github.com/richardsanchez-c137/Numerick/pull/6), merged 8 November 2026 |
-| PR #6 merge commit | `c91a5829a85aa7b10539baedf29f95c912989426` |
-| Current working branch | `docs/phase-1a-toolresult-contract-design` |
-| Current HEAD / base commit | `c91a5829a85aa7b10539baedf29f95c912989426`; local `main` and `origin/main` point to this baseline |
-| Current working tree | Documentation in progress: `CURRENT_STATE.md`, `ROADMAP.md`, `NUMERICK_MASTER_CHECKLIST.md`, `SESSION_LOG.md`; untracked: `PHASE1A_TOOLRESULT_CONTRACT.md`; no production source changes |
-| Contract-design branch publication | Not yet committed or pushed; no PR opened |
+| Main branch | `main` |
+| PR #8 | [feat: migrate tools to structured ToolResult](https://github.com/richardsanchez-c137/Numerick/pull/8) |
+| PR #8 state | Merged on 8 November 2026 |
+| PR #8 merge commit | `4355d9d` |
+| PR #8 final feature commit | `a55f65a` |
+| PR #8 commits | 5 |
+| PR #8 files changed | 15 |
+| Implementation branch | `feat/phase-1a-toolagent-integration` |
+| Implementation branch base | `4355d9d` |
+| Local main synchronization | `git pull origin main` completed successfully |
+| Working tree on the new branch | Documentation handoff changes only; no production source changes yet |
 
-PR #3 merged three commits and 31 changed files, establishing the code baseline for Phase 0. PR #4 subsequently integrated the documentation closeout: eight files merged into `main` with merge commit `862761d514650a04c7a1f2b537fb23dbebf293ea`. PR #5 completed the Phase 0 handoff and merged into `main` with commit `a81fc47ec87edd83aa7e2fa63ed79c30f98eeb4c`.
+PR #8 integrated the first three implementation steps of the approved Phase 1A ToolResult contract. The latest merged implementation includes structured results, registry-owned execution metadata, migrated built-in/application/project-file handlers, and structured project-file error-classification tests.
+
+The local working environment was synchronized with `main` before creating the current implementation branch.
 
 ## 2. Implemented capabilities with current evidence
 
@@ -41,10 +34,16 @@ PR #3 merged three commits and 31 changed files, establishing the code baseline 
 
 - C++17 console application built with CMake.
 - Local Ollama integration; the observed runtime configuration was `qwen3.5:4b` at `http://127.0.0.1:11434`.
-- Tool registry with tool definitions, supported JSON-schema-style argument validation, handlers, success/failure results and exception containment.
+- Structured `ToolResult` class implemented with five statuses, stable error codes, factory validation, safe error messages and separate diagnostic details.
+- `ToolRegistry::execute()` returns structured results and attaches execution duration and handler-invocation metadata.
+- Native structured handlers are supported alongside the temporary legacy handler interface.
+- All nine registered tools have been migrated to structured handler results: `get_local_time`, `open_application` and seven project-file tools.
+- Project-file handlers classify invalid arguments, blocked paths, missing resources, resource limits and I/O failures.
 - Agent can request registered tools and enforces configured tool-round and tool-call limits.
+- `ToolAgent` still consumes `LegacyToolResult` through `executeLegacy()` in both its deterministic relationship-inspection route and normal model-directed execution. Native structured ToolAgent integration is the current work item.
+- Existing per-tool agent diagnostics still record name and outcome strings; typed status/error metadata and complete outcome accounting remain pending.
 - Read-only workspace/project inspection tools remain available.
-- Explicit local persistent facts are separate from temporary conversation history. Memory is opt-in and stored locally; it is not the complete memory/continuity system in the long-term roadmap.
+- Explicit local persistent facts are separate from temporary conversation history. Memory remains opt-in and is not the complete memory/continuity system in the long-term roadmap.
 
 ### Voice pipeline
 
@@ -64,6 +63,21 @@ PR #3 merged three commits and 31 changed files, establishing the code baseline 
 - Matching logic has dedicated automated tests.
 
 ## 3. Build and test evidence
+
+### Phase 1A ToolResult implementation — PR #8
+
+Integrated into `main` through [PR #8](https://github.com/richardsanchez-c137/Numerick/pull/8), merged on 8 November 2026.
+
+- Merge commit: `4355d9d`.
+- Final feature commit: `a55f65a` — `test: verify structured project file errors`.
+- Five commits and 15 changed files were included in the PR.
+- Local build command: `cmake --build .\build-release --parallel` — successful.
+- Local test command: `ctest --test-dir .\build-release --output-on-failure` — all 12/12 CTest suites passed.
+- GitHub Actions Windows UCRT64 CI passed for the final PR head `a55f65a`.
+- No merge conflicts were reported.
+- Structured project-file error tests verify path traversal, missing files, oversized files, binary files and invalid UTF-8.
+
+The above is targeted Phase 1A verification. A new clean release verification using `scripts/verify-release.ps1 -Clean` and a fresh live Ollama smoke test were not performed as part of PR #8.
 
 ### Local release verification
 
@@ -132,22 +146,52 @@ This did not change the machine/user execution policy permanently. The native bu
 - Voice latency, CPU/GPU/RAM utilization, repeated-turn stability and long-session reliability have not been comprehensively measured.
 - Wake-word activation, reliable barge-in/interruption, configurable push-to-talk, and robust microphone-loss/noise recovery are not complete.
 - `open_application` launches a tested subset of applications. General window enumeration/focus/close operations, Windows UI Automation, semantic click/type/scroll workflows and robust dialog handling are not implemented.
-- Tool execution still lacks a common structured error code/result metadata contract, per-tool timeout/cancellation and a permission/confirmation model.
 - Agent planning is bounded tool-call orchestration, not a general plan/act/verify task engine.
 - Persistent memory is basic explicit local fact storage, not the full episodic/project/preference/task memory system. It is local plaintext, not encrypted.
 - No general screen understanding, on-demand camera/document perception, source-grounded web research or proactive companion behavior is claimed as implemented.
 
+- Structured `ToolResult` and registry-owned execution metadata are implemented and merged. Full ToolAgent integration remains incomplete.
+- `ToolAgent` still uses `LegacyToolResult` and `executeLegacy()`. Dedicated timeout/cancellation accounting, typed diagnostics and derived processed/not-executed accounting remain pending.
+- Per-tool timeout enforcement and cancellation propagation are not implemented. The presence of `TimedOut` and `Cancelled` result statuses does not provide enforcement.
+- Structured execution logging, including safely redacted arguments and per-tool start/end information, remains incomplete.
+- The permission/confirmation model, including risk levels and user approval before consequential actions, remains unimplemented.
+
 ## 6. Next work item
 
-**Phase 1A — Implement the approved standard `ToolResult` contract.**
+**Phase 1A — Step 4: ToolAgent integration.**
 
-The Phase 1A architecture audit is integrated into `main` through PR #6. Its merge commit is `c91a5829a85aa7b10539baedf29f95c912989426`.
+The ToolResult implementation foundation was merged into `main` through PR #8 on 8 November 2026. Merge commit: `4355d9d`.
 
-The approved design is documented in `PHASE1A_TOOLRESULT_CONTRACT.md` on branch `docs/phase-1a-toolresult-contract-design`. It defines five statuses, stable error codes, a private-state result class with factory methods, registry-owned execution metadata, safe error-message separation, agent accounting, and the migration/test sequence.
+The approved implementation contract is documented in `PHASE1A_TOOLRESULT_CONTRACT.md`.
 
-The current branch is documentation-only. No production source code has been changed and no fresh build or CTest run has been performed for the contract.
+**Current branch:** `feat/phase-1a-toolagent-integration`
+**Base commit:** `4355d9d`
 
-Next: complete the contract-design documentation handoff, then create an implementation branch from the merged baseline. Begin with Step 1: implement the core result type, factories, name conversion and focused tests. Timeout and cancellation enforcement remain future work; permission confirmations remain Phase 1B.
+### Objective
+
+Migrate ToolAgent to consume native structured `ToolResult` values in both deterministic and model-directed execution paths.
+
+### Scope
+
+- `include/numerick/tool_agent.hpp`
+- `src/core/tool_agent.cpp`
+- `tests/tool_agent_tests.cpp`
+- `tests/tool_agent_conversation_tests.cpp`
+
+### Acceptance criteria
+
+- Handle all five statuses independently: Succeeded, Failed, Rejected, TimedOut and Cancelled.
+- Maintain mutually exclusive outcome counters.
+- Derive processed and not-executed counts consistently.
+- Account correctly for remaining calls when an execution path returns early.
+- Keep internal diagnostic details out of model-facing conversation messages.
+- Preserve existing Ollama tool-message compatibility and successful textual outputs.
+- Migrate the deterministic C++ relationship-inspection route to structured results.
+
+Timeout and cancellation enforcement are not part of this step. Permission and confirmation design remains Phase 1B.
+
+After Step 4, proceed to Step 5 diagnostics, Step 6 regression tests and Step 7 integration verification in the approved contract sequence.
+
 ## 7. Verification commands
 
 ```powershell
