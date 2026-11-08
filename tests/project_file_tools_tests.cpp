@@ -49,6 +49,14 @@ static LegacyToolResult call(
     return registry.executeLegacy(name, arguments);
 }
 
+static numerick::ToolResult callStructured(
+    const ToolRegistry& registry,
+    const std::string& name,
+    const Json& arguments
+) {
+    return registry.execute(name, arguments);
+}
+
 static void testRegistersOnlyReadOnlyProjectTools() {
     TemporaryWorkspace workspace;
     ToolRegistry registry;
@@ -248,6 +256,61 @@ static void testBlocksNonTextAndOversizedFiles() {
     assert(invalidUtf8Result.output.find("valid UTF-8") != std::string::npos);
 }
 
+static void testStructuredProjectFileErrorClassification() {
+    TemporaryWorkspace workspace;
+
+    writeText(
+        workspace.root() / "large.txt",
+        std::string(256 * 1024 + 1, 'x')
+    );
+    writeText(
+        workspace.root() / "binary.txt",
+        std::string("text\0binary", 11)
+    );
+    writeText(
+        workspace.root() / "invalid_utf8.txt",
+        std::string("bad\xC3\x28", 5)
+    );
+
+    ToolRegistry registry;
+    numerick::registerProjectFileTools(registry, workspace.root());
+
+    // 1. Path traversal
+    const auto traversal = callStructured(
+        registry, "read_project_file", {{"path", "../README.md"}}
+    );
+    assert(traversal.status() == numerick::ToolStatus::Rejected);
+    assert(traversal.errorCode() == numerick::ToolErrorCode::PermissionDenied);
+
+    // 2. Missing file
+    const auto missing = callStructured(
+        registry, "read_project_file", {{"path", "missing.md"}}
+    );
+    assert(missing.status() == numerick::ToolStatus::Failed);
+    assert(missing.errorCode() == numerick::ToolErrorCode::ResourceNotFound);
+
+    // 3. Oversized file
+    const auto large = callStructured(
+        registry, "read_project_file", {{"path", "large.txt"}}
+    );
+    assert(large.status() == numerick::ToolStatus::Rejected);
+    assert(large.errorCode() == numerick::ToolErrorCode::ResourceLimitExceeded);
+
+    // 4. Binary file
+    const auto binary = callStructured(
+        registry, "read_project_file", {{"path", "binary.txt"}}
+    );
+    assert(binary.status() == numerick::ToolStatus::Failed);
+    assert(binary.errorCode() == numerick::ToolErrorCode::IoError);
+
+    // 5. Invalid UTF-8
+    const auto invalidUtf8 = callStructured(
+        registry, "read_project_file", {{"path", "invalid_utf8.txt"}}
+    );
+    assert(invalidUtf8.status() == numerick::ToolStatus::Failed);
+    assert(invalidUtf8.errorCode() == numerick::ToolErrorCode::IoError);
+}
+
 static void testCapsReturnedFileContent() {
     TemporaryWorkspace workspace;
     writeText(workspace.root() / "long.txt", std::string(30 * 1024, 'a'));
@@ -375,6 +438,7 @@ static void testFindCppSymbolRejectsInvalidIdentifiers() {
 
 int main() {
     testRegistersOnlyReadOnlyProjectTools();
+    testStructuredProjectFileErrorClassification();
     testRegistersSearchAndSymbolTools();
     testDescribesWorkspaceArchitectureReadOnly();
     testInspectCppComponentGroupsEvidence();
