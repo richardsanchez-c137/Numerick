@@ -206,6 +206,29 @@ int main() {
     // Legacy exception text is not forwarded to model-facing responses.
     //
 
+    registry.registerTool(
+        {
+            "native_rejection",
+            "Tests a native structured handler.",
+            {{"type", "object"}}
+        },
+        [](const Json&) -> numerick::ToolResult {
+            return numerick::ToolResult::rejected(
+                numerick::ToolErrorCode::PermissionDenied,
+                "Permission was denied."
+            );
+        }
+    );
+
+    const auto nativeRejected = registry.execute(
+        "native_rejection",
+        Json::object()
+    );
+    assert(nativeRejected.status() == numerick::ToolStatus::Rejected);
+    assert(nativeRejected.errorCode() == numerick::ToolErrorCode::PermissionDenied);
+    assert(nativeRejected.errorMessage() == "Permission was denied.");
+    assert(nativeRejected.execution().duration.has_value());
+    assert(nativeRejected.execution().handlerInvoked);
     std::cout << "All tool registry tests passed.\n";
 
     

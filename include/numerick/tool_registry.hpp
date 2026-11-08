@@ -27,12 +27,19 @@ struct LegacyToolResult {
 
 using ToolHandler =
     std::function<LegacyToolResult(const Json& arguments)>;
+using StructuredToolHandler =
+    std::function<ToolResult(const Json& arguments)>;
 
 class ToolRegistry {
 public:
     void registerTool(
         ToolDefinition definition,
         ToolHandler handler
+    );
+
+    void registerTool(
+        ToolDefinition definition,
+        StructuredToolHandler handler
     );
 
     bool contains(const std::string& name) const;
@@ -53,8 +60,15 @@ public:
 private:
     struct RegisteredTool {
         ToolDefinition definition;
-        ToolHandler handler;
+        ToolHandler legacyHandler;
+        StructuredToolHandler handler;
     };
+
+    void registerToolImpl(
+        ToolDefinition definition,
+        ToolHandler legacyHandler,
+        StructuredToolHandler handler
+    );
 
     std::map<std::string, RegisteredTool> tools_;
 };

@@ -202,6 +202,29 @@ void ToolRegistry::registerTool(
     ToolDefinition definition,
     ToolHandler handler
 ) {
+    registerToolImpl(
+        std::move(definition),
+        std::move(handler),
+        {}
+    );
+}
+
+void ToolRegistry::registerTool(
+    ToolDefinition definition,
+    StructuredToolHandler handler
+) {
+    registerToolImpl(
+        std::move(definition),
+        {},
+        std::move(handler)
+    );
+}
+
+void ToolRegistry::registerToolImpl(
+    ToolDefinition definition,
+    ToolHandler legacyHandler,
+    StructuredToolHandler handler
+) {
     if (!isValidToolName(definition.name)) {
         throw std::invalid_argument(
             "Tool names must contain only letters, numbers, "
@@ -222,9 +245,10 @@ void ToolRegistry::registerTool(
         throw std::invalid_argument(schemaError);
     }
 
-    if (!handler) {
+    if (static_cast<bool>(legacyHandler) ==
+        static_cast<bool>(handler)) {
         throw std::invalid_argument(
-            "A tool must have a valid handler."
+            "A tool must have exactly one valid handler."
         );
     }
 
@@ -234,6 +258,7 @@ void ToolRegistry::registerTool(
         name,
         RegisteredTool{
             std::move(definition),
+            std::move(legacyHandler),
             std::move(handler)
         }
     );
@@ -302,7 +327,12 @@ ToolResult ToolRegistry::execute(
     handlerInvoked = true;
 
     try {
-        LegacyToolResult legacy = iterator->second.handler(arguments);
+        if (iterator->second.handler) {
+            return finish(iterator->second.handler(arguments));
+        }
+
+        LegacyToolResult legacy =
+            iterator->second.legacyHandler(arguments);
 
         if (legacy.success) {
             return finish(ToolResult::succeeded(

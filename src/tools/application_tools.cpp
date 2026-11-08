@@ -330,34 +330,34 @@ bool launchShellTarget(
     return true;
 }
 
-LegacyToolResult openApplication(const Json& arguments) {
+ToolResult openApplication(const Json& arguments) {
     if (!arguments.is_object() ||
         arguments.size() != 1 ||
         !arguments.contains("application_name") ||
         !arguments["application_name"].is_string()) {
-        return {
-            false,
+        return ToolResult::rejected(
+            ToolErrorCode::InvalidArguments,
             "Expected exactly one string argument: application_name."
-        };
+        );
     }
 
     const std::string requested =
         arguments["application_name"].get<std::string>();
 
     if (requested.empty() || requested.size() > 128) {
-        return {
-            false,
+        return ToolResult::rejected(
+            ToolErrorCode::InvalidArguments,
             "Application name must contain between 1 and 128 bytes."
-        };
+        );
     }
 
     const std::wstring applicationName = toWide(requested);
 
     if (applicationName.empty()) {
-        return {
-            false,
+        return ToolResult::rejected(
+            ToolErrorCode::InvalidArguments,
             "Application name contains invalid UTF-8."
-        };
+        );
     }
 
     std::string launchError;
@@ -368,21 +368,18 @@ LegacyToolResult openApplication(const Json& arguments) {
                 L"explorer.exe",
                 L"shell:AppsFolder\\Microsoft.WindowsCamera_8wekyb3d8bbwe!App",
                 launchError)) {
-            return {
-                true,
+            return ToolResult::succeeded(
                 "Windows Camera launch request submitted."
-            };
+            );
         }
     }
 
     // Spotify may register its own application URI protocol.
     if (equalsIgnoreCase(applicationName, L"spotify")) {
-        if (launchShellTarget(
-                L"spotify:", L"", launchError)) {
-            return {
-                true,
+        if (launchShellTarget(L"spotify:", L"", launchError)) {
+            return ToolResult::succeeded(
                 "Spotify launch request submitted."
-            };
+            );
         }
     }
 
@@ -390,52 +387,51 @@ LegacyToolResult openApplication(const Json& arguments) {
     const auto matches = findShortcuts(applicationName);
 
     if (matches.size() > 1) {
-        return {
-            false,
+        return ToolResult::rejected(
+            ToolErrorCode::InvalidArguments,
             "Multiple Start Menu shortcuts match '" +
                 requested + "'. Please use a more specific name."
-        };
+        );
     }
 
     if (matches.size() == 1) {
         if (!launchShellTarget(
                 matches.front().wstring(), L"", launchError)) {
-            return {
-                false,
+            return ToolResult::failed(
+                ToolErrorCode::LaunchFailed,
+                "Windows could not launch the requested application.",
                 launchError
-            };
+            );
         }
 
-        return {
-            true,
+        return ToolResult::succeeded(
             "Launch request submitted for " + requested + "."
-        };
+        );
     }
 
     // Next search Windows executable directories.
     const auto executable = findExecutable(applicationName);
 
     if (!executable) {
-        return {
-            false,
+        return ToolResult::failed(
+            ToolErrorCode::ResourceNotFound,
             "Application not found in Start Menu shortcuts or "
             "Windows executable search paths: " + requested
-        };
+        );
     }
 
     if (!launchShellTarget(
             executable->wstring(), L"", launchError)) {
-        return {
-            false,
+        return ToolResult::failed(
+            ToolErrorCode::LaunchFailed,
+            "Windows could not launch the requested application.",
             launchError
-        };
+        );
     }
 
-    return {
-        true,
+    return ToolResult::succeeded(
         "Launch request submitted for " + requested + "."
-    };
-
+    );
 } // namespace
 } // namespace
 void registerApplicationTools(ToolRegistry& registry) {
