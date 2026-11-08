@@ -3,7 +3,7 @@
 **Document type:** Living product roadmap and implementation ledger<br>
 **Roadmap baseline:** 8 November 2026<br>
 **Project direction:** A personal, voice-first AI companion for the Windows PC, with perception, memory, reasoning, computer control, research and engineering capabilities.<br>
-**Implementation preference:** C++ core; local-first where practical; hybrid cloud/remote inference for workloads that exceed the laptop's limits.
+**Implementation policy:** Choose the language per component based on reliability, development speed, maintainability and ecosystem fit. Retain the existing C++17 core; use local-first inference where practical and hybrid cloud/remote inference for workloads that exceed the laptop's limits. See DEC-009.
 
 > **Purpose:** This document is the single roadmap reference for NUMERICK. It separates what has already been reported working from what remains planned. A feature must not be marked complete merely because code was written or because an AI model claimed success.
 
@@ -31,7 +31,7 @@
 - [ ] Make small, reviewable changes. Do not replace whole files when a targeted patch is safer.
 - [ ] Preserve the working baseline. Run the relevant tests after each change and the full release verification at milestone boundaries.
 - [ ] Keep architecture decisions in `DECISIONS.md`; do not silently change direction mid-feature.
-- [ ] Prefer C++ for the core and system integration. Use another language only when a concrete technical reason justifies it, and document the boundary.
+- [ ] Choose implementation languages per component based on concrete technical trade-offs. Document service, IPC, FFI or library boundaries and avoid rewriting stable components solely to change languages (DEC-009).
 - [ ] Design for the actual laptop: Ryzen 7 7445HS, RTX 4050 Laptop GPU with 6 GB VRAM, 16 GB RAM, 1 TB SSD. Do not design around unlimited GPU memory.
 - [ ] Use local models for low-latency/private tasks where feasible. Route heavier reasoning or vision tasks to an explicitly configured remote provider when needed.
 - [ ] External actions must have permission boundaries, an execution log, and a way to stop or recover.
@@ -57,7 +57,7 @@ At the end of a session:
 
 ## 1. Current baseline — what we last had working
 
-**Baseline note:** Voice Engine 2.1 was merged by PR #3, and the Phase 0 documentation closeout was merged into `main` by PR #4 on 8 November 2026. The Phase 0 closeout merge commit is `862761d`. Current hashes, commands and observed limits are recorded in `CURRENT_STATE.md`. Historical `[x]` labels still mean previously verified; consult the current snapshot for the exact verification date and evidence.
+**Baseline note:** Voice Engine 2.1 was merged by PR #3. The Phase 0 documentation closeout was integrated into `main` through PR #4 and PR #5 on 8 November 2026; the final Phase 0 handoff merge commit is `a81fc47`. Current hashes, commands and observed limits are recorded in `CURRENT_STATE.md`. Historical `[x]` labels still mean previously verified; consult the current snapshot for the exact verification date and evidence.
 
 ### 1.1 Core application and agent
 
@@ -107,7 +107,7 @@ At the end of a session:
 - [x] PR #3 (`Voice engine 2.1 and Windows application control`) merged into `main` on 8 November 2026.
 - [x] Local `main` fast-forwarded to `0f2d64ae5bcde2b82e52c11f524d3b3f0f3bb8d7`; `git status -sb` reported `## main...origin/main`.
 - [~] Voice latency, peak CPU/GPU/RAM use and long-session stability still need measurement.
-- [~] Create and maintain root-level `CURRENT_STATE.md`, `DECISIONS.md`, `ROADMAP.md` and `SESSION_LOG.md` (records are prepared on this documentation branch; integrate the branch before treating Phase 0 as closed).
+- [x] Create and maintain root-level `CURRENT_STATE.md`, `DECISIONS.md`, `ROADMAP.md` and `SESSION_LOG.md` (integrated into `main` through PR #4 and PR #5).
 ### 1.5 Known boundary of the current version
 
 - [x] NUMERICK can hold a continuous voice interaction and invoke its current registered tools.
@@ -136,11 +136,11 @@ At the end of a session:
 - [x] Run manual voice regressions for a short joke and three-sentence explanation after the native TTS cap change.
 - [x] Confirm the four known app-launch cases: Camera, Spotify, Notepad and Blender (manual checks from the integration work).
 - [x] Record machine-specific runtime assets, PowerShell execution-policy assumption, native worker build warning and remaining test gaps.
-- [x] Add/maintain `CURRENT_STATE.md` with verified facts, not aspirations (integrated into `main` through PR #4).
-- [x] Add/maintain `DECISIONS.md` for architecture choices and trade-offs (integrated into `main` through PR #4).
-- [x] Add/maintain `ROADMAP.md` and `SESSION_LOG.md` (integrated into `main` through PR #4).
+- [x] Add/maintain `CURRENT_STATE.md` with verified facts, not aspirations (integrated into `main` through PR #4 and PR #5).
+- [x] Add/maintain `DECISIONS.md` for architecture choices and trade-offs (integrated into `main` through PR #4 and PR #5).
+- [x] Add/maintain `ROADMAP.md` and `SESSION_LOG.md` (integrated into `main` through PR #4 and PR #5).
 
-**Exit criteria:** Technical baseline, remote/PR/merge state and tests are known. The Phase 0 documentation set is integrated into `main` through PR #4. The current work item is now Phase 1A.
+**Exit criteria:** Technical baseline, remote/PR/merge state and tests are known. The Phase 0 documentation set and final handoff are integrated into `main` through PR #4 and PR #5. The current work item is now Phase 1A.
 ## Phase 1 — Reliability, safety and tool foundations
 
 **Goal:** Make every current and future capability predictable, observable and safe to invoke.
@@ -659,15 +659,19 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 > Update this panel whenever the active task changes. There must be only one active work item.
 
 - **Current phase:** Phase 1 — Reliability, safety and tool foundations.
-- **Current work item:** Phase 1A — Inspect and document the existing tool execution contract before proposing interface changes.
-- **Status:** `[ ]` Phase 1A has not started. The first task is inspection and documentation only; no interface redesign has begun.
-- **Expected deliverable:** A concise, code-grounded map of the current `ToolRegistry`, tool definitions, handlers and `ToolAgent` execution path, including identified gaps.
-- **Acceptance evidence to record:** Identify relevant source files and symbols; document `ToolResult`, schema validation, handler exceptions, unknown-tool behavior, agent call/round limits and existing diagnostics; identify relevant tests.
-- **Do not assume:** Structured permissions, per-tool timeout/cancellation, broad Windows UI Automation or verified multi-step task execution already exist.
+- **Current work item:** Phase 1A — Design and agree on the standard `ToolResult` contract.
+- **Status:** `[ ]` The architecture audit is documented in `PHASE1A_TOOL_EXECUTION_AUDIT.md` and reviewed on this branch. The audit was documentation-only: no production source code was changed and no fresh runtime tests were run for it. Contract design remains pending.
+- **Expected deliverable:** A reviewed contract proposal covering structured tool outcomes, error taxonomy, execution metadata, validation and failure behavior, and compatibility with the existing `ToolRegistry` and `ToolAgent`.
+- **Acceptance evidence to record:** Agreed fields and types; semantics for success, failure and rejection; error-code mapping; human-readable messages; execution metadata; treatment of timeout and cancellation outcomes; separation of user-facing messages from diagnostics; migration approach; and a corresponding test matrix.
+- **Guardrails:** Do not implement the new interface before its design is reviewed. Do not treat timeout, cancellation or permission/confirmation support as already implemented. Permission and confirmation design remains Phase 1B.
 
-## Next work item after Phase 0
+## Phase 1A work sequence
 
-**Phase 1A — Standardize the tool execution contract.** Inspect the existing `ToolRegistry`, tool definitions, handlers and agent execution path first. Document the current result/error behavior before modifying it. Do not redesign the whole agent in one change. The first inspection should capture the current `ToolResult` fields, schema validation subset, handler exception handling, agent call/round limits, and existing per-tool diagnostics.
+- [x] Inspect and document the existing tool execution architecture in `PHASE1A_TOOL_EXECUTION_AUDIT.md` (prepared and reviewed on this branch; commit, push and merge status are tracked separately).
+- [ ] Design and review the standard `ToolResult` contract before changing source code.
+- [ ] After the contract is agreed, plan small implementation steps and corresponding automated tests.
+
+---
 # 5. Supporting project records
 
 Keep these files at the repository root (or update the equivalent existing documents if they already exist):
