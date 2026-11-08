@@ -33,3 +33,5 @@ models/
 
 # Rust build output
 /voice-service/target/
+# Native NVIDIA voice worker build output
+/build-native-voice-msvc/

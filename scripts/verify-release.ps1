@@ -62,7 +62,7 @@ $mainText = Get-Content -LiteralPath (Join-Path $repoRoot "src\main.cpp") -Raw
 
 $versionPatterns = @{
     "CMakeLists.txt" = 'project\(\s*Numerick\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)'
-    "README.md" = '## Current development status[^\r\n]*?([0-9]+\.[0-9]+\.[0-9]+)'
+    "README.md" = '## Stable baseline[^\r\n]*?v([0-9]+\.[0-9]+\.[0-9]+)'
     "documentation.md" = '\*\*Current version:\*\*\s*([0-9]+\.[0-9]+\.[0-9]+)'
     "src/main.cpp" = 'Core version:\s*([0-9]+\.[0-9]+\.[0-9]+)'
 }

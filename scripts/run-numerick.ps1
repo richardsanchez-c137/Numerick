@@ -25,9 +25,19 @@ $TtsModels = Join-Path $TtsPack "data\nvigi.models"
 $SpeakerProfile = Join-Path $VoiceLab "reference.json"
 $TtsOutput = Join-Path $VoiceLab "generated"
 
-# Rust voice-service executable built from this repository.
-$VoiceService = Join-Path $ProjectRoot `
+# Prefer the standalone MSVC NVIGI worker. Keep Rust as the compatibility fallback.
+$NativeVoiceService = Join-Path $ProjectRoot "build-native-voice-msvc\numerick-nvigi-voice-worker.exe"
+$RustVoiceService = Join-Path $ProjectRoot `
     "voice-service\target\release\numerick-voice-service.exe"
+
+if (Test-Path $NativeVoiceService -PathType Leaf) {
+    $VoiceService = $NativeVoiceService
+    $VoiceServiceLabel = "native NVIGI worker"
+}
+else {
+    $VoiceService = $RustVoiceService
+    $VoiceServiceLabel = "Rust voice service (fallback)"
+}
 
 # Validate the core runtime setup.
 if (-not (Test-Path $UcrtBin -PathType Container)) {
@@ -115,13 +125,13 @@ Write-Host "Version:       1.2.0"
 Write-Host "Speech input:  Whisper (local)"
 
 if ($VoiceReady) {
-    Write-Host "Speech output: NVIDIA Qwen3-TTS (custom voice)"
+    Write-Host ("Speech output: NVIDIA Qwen3-TTS (" + $VoiceServiceLabel + ")")
     Write-Host "Fallback:      Windows SAPI"
     Write-Host "TTS backend:   CUDA"
 }
 else {
     Write-Host "Speech output: Windows SAPI"
-    Write-Warning "Custom voice assets or Rust service are unavailable."
+    Write-Warning "Custom voice assets or configured voice worker are unavailable."
 }
 
 Write-Host "Backend:       GGML CPU (Whisper)"
