@@ -9,7 +9,7 @@
 using numerick::Json;
 using numerick::ToolDefinition;
 using numerick::ToolRegistry;
-using numerick::ToolResult;
+using numerick::LegacyToolResult;
 
 int main() {
     ToolRegistry registry;
@@ -29,7 +29,7 @@ int main() {
 
     registry.registerTool(
         echoDefinition,
-        [](const Json& arguments) -> ToolResult {
+        [](const Json& arguments) -> LegacyToolResult {
             if (!arguments.contains("text") ||
                 !arguments["text"].is_string()) {
                 return {
@@ -131,7 +131,7 @@ int main() {
     try {
         registry.registerTool(
             echoDefinition,
-            [](const Json&) -> ToolResult {
+            [](const Json&) -> LegacyToolResult {
                 return {true, "This should never replace the tool."};
             }
         );
@@ -149,7 +149,7 @@ int main() {
             "A controlled test for handler failures.",
             {{"type", "object"}}
         },
-        [](const Json&) -> ToolResult {
+        [](const Json&) -> LegacyToolResult {
             throw std::runtime_error("Expected test exception");
         }
     );
@@ -181,7 +181,7 @@ int main() {
                     "An invalid schema used for testing.",
                     schema
                 },
-                [](const Json&) -> ToolResult {
+                [](const Json&) -> LegacyToolResult {
                     return {true, "This handler must not run."};
                 }
             );

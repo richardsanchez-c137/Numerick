@@ -64,6 +64,7 @@ add_executable(numerick
     src/tools/application_tools.cpp
     src/tools/application_matcher.cpp
     src/tools/project_file_tools.cpp
+    src/core/tool_result.cpp
     src/core/tool_agent.cpp
     src/tools/tool_registry.cpp
     src/tools/builtin_tools.cpp
@@ -97,6 +98,13 @@ target_include_directories(command_parser_tests PRIVATE include)
 numerick_enable_warnings(command_parser_tests)
 add_test(NAME command_parser_tests COMMAND command_parser_tests)
 
+add_executable(tool_result_tests
+    tests/tool_result_tests.cpp
+    src/core/tool_result.cpp
+)
+target_include_directories(tool_result_tests PRIVATE include)
+numerick_enable_warnings(tool_result_tests)
+add_test(NAME tool_result_tests COMMAND tool_result_tests)
 add_executable(tool_registry_tests
     tests/tool_registry_tests.cpp
     src/tools/tool_registry.cpp

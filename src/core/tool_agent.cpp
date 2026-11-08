@@ -244,7 +244,7 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
             {"class_b", memberPairs[1].first},
             {"member_b", memberPairs[1].second}
         };
-        const ToolResult relationship = registry_.execute(
+        const LegacyToolResult relationship = registry_.execute(
             "inspect_cpp_member_relationship", arguments
         );
 
@@ -382,7 +382,7 @@ AgentRunReport ToolAgent::runWithConversationDiagnostics(
         for (const Json& call : requestedCalls) {
             std::string toolName = "__invalid_tool_call__";
             std::string outcome = "rejected";
-            ToolResult result{
+            LegacyToolResult result{
                 false,
                 "Malformed tool request."
             };

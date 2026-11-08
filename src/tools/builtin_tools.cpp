@@ -48,7 +48,7 @@ void registerBuiltinTools(ToolRegistry& registry) {
                 {"additionalProperties", false}
             }
         },
-        [](const Json& arguments) -> ToolResult {
+        [](const Json& arguments) -> LegacyToolResult {
             if (!arguments.empty()) {
                 return {
                     false,

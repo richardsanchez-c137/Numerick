@@ -258,7 +258,7 @@ std::vector<ToolDefinition> ToolRegistry::definitions() const {
     return result;
 }
 
-ToolResult ToolRegistry::execute(
+LegacyToolResult ToolRegistry::execute(
     const std::string& name,
     const Json& arguments
 ) const {

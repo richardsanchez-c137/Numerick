@@ -1,4 +1,4 @@
-﻿#include "numerick/application_tools.hpp"
+#include "numerick/application_tools.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -330,7 +330,7 @@ bool launchShellTarget(
     return true;
 }
 
-ToolResult openApplication(const Json& arguments) {
+LegacyToolResult openApplication(const Json& arguments) {
     if (!arguments.is_object() ||
         arguments.size() != 1 ||
         !arguments.contains("application_name") ||

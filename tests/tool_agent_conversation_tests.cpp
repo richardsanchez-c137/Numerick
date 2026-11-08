@@ -13,7 +13,7 @@ using Json = nlohmann::json;
 using numerick::ChatClient;
 using numerick::ToolAgent;
 using numerick::ToolRegistry;
-using numerick::ToolResult;
+using numerick::LegacyToolResult;
 
 class ScriptedChatClient final : public ChatClient {
 public:
@@ -101,7 +101,7 @@ static void registerEchoTool(ToolRegistry& registry) {
                 {"additionalProperties", false}
             }
         },
-        [](const Json& arguments) -> ToolResult {
+        [](const Json& arguments) -> LegacyToolResult {
             return {true, arguments["text"].get<std::string>()};
         }
     );

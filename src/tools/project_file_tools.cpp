@@ -1169,7 +1169,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> ToolResult {
+        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
             try {
                 return {true, listDirectory(
                     canonicalRoot,
@@ -1199,7 +1199,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> ToolResult {
+        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
             try {
                 return {true, readProjectFile(
                     canonicalRoot,
@@ -1226,7 +1226,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> ToolResult {
+        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
             try {
                 return {true, searchWorkspace(
                     canonicalRoot,
@@ -1256,7 +1256,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> ToolResult {
+        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
             try {
                 const std::string symbol = requireStringArgument(arguments, "symbol");
                 if (!isValidCppIdentifier(trim(symbol))) {
@@ -1294,7 +1294,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> ToolResult {
+        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
             try {
                 return {true, inspectCppMemberRelationship(
                     canonicalRoot,
@@ -1323,7 +1323,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> ToolResult {
+        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
             try {
                 return {true, inspectCppComponent(
                     canonicalRoot,
@@ -1346,7 +1346,7 @@ void registerProjectFileTools(
                 {"additionalProperties", false}
             }
         },
-        [canonicalRoot](const Json& arguments) -> ToolResult {
+        [canonicalRoot](const Json& arguments) -> LegacyToolResult {
             try {
                 if (!arguments.is_object() || !arguments.empty()) {
                     throw std::invalid_argument(

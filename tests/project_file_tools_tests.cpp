@@ -11,7 +11,7 @@
 namespace fs = std::filesystem;
 using numerick::Json;
 using numerick::ToolRegistry;
-using numerick::ToolResult;
+using numerick::LegacyToolResult;
 
 class TemporaryWorkspace {
 public:
@@ -41,7 +41,7 @@ static void writeText(const fs::path& path, const std::string& contents) {
     assert(output.good());
 }
 
-static ToolResult call(
+static LegacyToolResult call(
     const ToolRegistry& registry,
     const std::string& name,
     const Json& arguments
@@ -69,7 +69,7 @@ static void testDescribesWorkspaceArchitectureReadOnly() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "describe_project_architecture", Json::object()
     );
 
@@ -81,7 +81,7 @@ static void testDescribesWorkspaceArchitectureReadOnly() {
     assert(result.output.find("ignored.txt") == std::string::npos);
     assert(result.output.find("not a complete call-graph analysis") != std::string::npos);
 
-    const ToolResult unexpectedArgument = call(
+    const LegacyToolResult unexpectedArgument = call(
         registry, "describe_project_architecture", {{"path", "."}}
     );
     assert(!unexpectedArgument.success);
@@ -100,7 +100,7 @@ static void testInspectCppMemberRelationshipReportsValueAndReferenceEvidence() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(registry, "inspect_cpp_member_relationship", {
+    const LegacyToolResult result = call(registry, "inspect_cpp_member_relationship", {
         {"class_a", "Owner"}, {"member_a", "registry_"},
         {"class_b", "Agent"}, {"member_b", "registry_"}
     });
@@ -128,7 +128,7 @@ static void testInspectCppComponentGroupsEvidence() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "inspect_cpp_component", {{"symbol", "render"}}
     );
 
@@ -155,7 +155,7 @@ static void testListsSafeProjectEntriesAndFiltersPrivateFolders() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "list_project_files", {{"path", "."}}
     );
 
@@ -175,7 +175,7 @@ static void testReadsAllowlistedTextFile() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "read_project_file", {{"path", "docs/overview.md"}}
     );
 
@@ -195,14 +195,14 @@ static void testBlocksTraversalAbsolutePathsAndPrivateFiles() {
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
 
-    const ToolResult traversal = call(
+    const LegacyToolResult traversal = call(
         registry, "read_project_file", {{"path", "../README.md"}}
     );
     assert(!traversal.success);
     assert(traversal.output.find("traversal") != std::string::npos);
 
     const fs::path outsidePath = workspace.root().parent_path() / "outside.txt";
-    const ToolResult absolute = call(
+    const LegacyToolResult absolute = call(
         registry, "read_project_file", {{"path", outsidePath.string()}}
     );
     assert(!absolute.success);
@@ -211,7 +211,7 @@ static void testBlocksTraversalAbsolutePathsAndPrivateFiles() {
     for (const std::string& path : {
             std::string(".env"), std::string("server.pem"),
             std::string("data/memory.json")}) {
-        const ToolResult blocked = call(
+        const LegacyToolResult blocked = call(
             registry, "read_project_file", {{"path", path}}
         );
         assert(!blocked.success);
@@ -229,19 +229,19 @@ static void testBlocksNonTextAndOversizedFiles() {
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
 
-    const ToolResult large = call(
+    const LegacyToolResult large = call(
         registry, "read_project_file", {{"path", "large.txt"}}
     );
     assert(!large.success);
     assert(large.output.find("read limit") != std::string::npos);
 
-    const ToolResult binaryResult = call(
+    const LegacyToolResult binaryResult = call(
         registry, "read_project_file", {{"path", "binary.txt"}}
     );
     assert(!binaryResult.success);
     assert(binaryResult.output.find("binary data") != std::string::npos);
 
-    const ToolResult invalidUtf8Result = call(
+    const LegacyToolResult invalidUtf8Result = call(
         registry, "read_project_file", {{"path", "invalid_utf8.txt"}}
     );
     assert(!invalidUtf8Result.success);
@@ -254,7 +254,7 @@ static void testCapsReturnedFileContent() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "read_project_file", {{"path", "long.txt"}}
     );
 
@@ -271,17 +271,17 @@ static void testRejectsDirectoriesAsFilesAndFilesAsDirectories() {
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
 
-    const ToolResult directoryAsFile = call(
+    const LegacyToolResult directoryAsFile = call(
         registry, "read_project_file", {{"path", "src"}}
     );
     assert(!directoryAsFile.success);
 
-    const ToolResult fileAsDirectory = call(
+    const LegacyToolResult fileAsDirectory = call(
         registry, "list_project_files", {{"path", "README.md"}}
     );
     assert(!fileAsDirectory.success);
 
-    const ToolResult missing = call(
+    const LegacyToolResult missing = call(
         registry, "read_project_file", {{"path", "missing.md"}}
     );
     assert(!missing.success);
@@ -302,7 +302,7 @@ static void testRejectsSymlinkEscapeWhenPlatformAllowsSymlinkCreation() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "read_project_file", {{"path", "external/outside.md"}}
     );
     assert(!result.success);
@@ -331,7 +331,7 @@ static void testSearchProjectFilesReturnsPathAndLineMatches() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "search_project_files", {{"query", "needlevalue"}}
     );
 
@@ -350,7 +350,7 @@ static void testFindCppSymbolUsesWholeIdentifierBoundaries() {
 
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "find_cpp_symbol", {{"symbol", "runAgent"}}
     );
 
@@ -366,7 +366,7 @@ static void testFindCppSymbolRejectsInvalidIdentifiers() {
     TemporaryWorkspace workspace;
     ToolRegistry registry;
     numerick::registerProjectFileTools(registry, workspace.root());
-    const ToolResult result = call(
+    const LegacyToolResult result = call(
         registry, "find_cpp_symbol", {{"symbol", "../secret"}}
     );
     assert(!result.success);

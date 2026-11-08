@@ -18,13 +18,13 @@ struct ToolDefinition {
     Json parametersSchema;
 };
 
-struct ToolResult {
+struct LegacyToolResult {
     bool success = false;
     std::string output;
 };
 
 using ToolHandler =
-    std::function<ToolResult(const Json& arguments)>;
+    std::function<LegacyToolResult(const Json& arguments)>;
 
 class ToolRegistry {
 public:
@@ -37,7 +37,7 @@ public:
 
     std::vector<ToolDefinition> definitions() const;
 
-    ToolResult execute(
+    LegacyToolResult execute(
         const std::string& name,
         const Json& arguments
     ) const;
