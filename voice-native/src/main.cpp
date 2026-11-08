@@ -1182,7 +1182,7 @@ private:
         runtime.temperature = 0.9f;
         runtime.topK = 50;
         runtime.seed = -1;
-        runtime.maxNewTokens = 2048;
+        runtime.maxNewTokens = 384;
         runtime.maxWordsPerChunk = kMaxWordsPerChunk;
         runtime.refSpkEmb = speaker_.embedding.data();
         runtime.refSpkDim = static_cast<int>(speaker_.embedding.size());
