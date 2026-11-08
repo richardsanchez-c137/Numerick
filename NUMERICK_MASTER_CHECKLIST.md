@@ -659,17 +659,18 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 > Update this panel whenever the active task changes. There must be only one active work item.
 
 - **Current phase:** Phase 1 — Reliability, safety and tool foundations.
-- **Current work item:** Phase 1A — Design and agree on the standard `ToolResult` contract.
-- **Status:** `[ ]` The architecture audit is documented in `PHASE1A_TOOL_EXECUTION_AUDIT.md` and reviewed on this branch. The audit was documentation-only: no production source code was changed and no fresh runtime tests were run for it. Contract design remains pending.
-- **Expected deliverable:** A reviewed contract proposal covering structured tool outcomes, error taxonomy, execution metadata, validation and failure behavior, and compatibility with the existing `ToolRegistry` and `ToolAgent`.
-- **Acceptance evidence to record:** Agreed fields and types; semantics for success, failure and rejection; error-code mapping; human-readable messages; execution metadata; treatment of timeout and cancellation outcomes; separation of user-facing messages from diagnostics; migration approach; and a corresponding test matrix.
-- **Guardrails:** Do not implement the new interface before its design is reviewed. Do not treat timeout, cancellation or permission/confirmation support as already implemented. Permission and confirmation design remains Phase 1B.
+- **Current work item:** Phase 1A — Implement the approved `ToolResult` contract, beginning with the core result type.
+- **Status:** `[x]` Architecture audit merged in PR #6. ToolResult contract approved and documented in `PHASE1A_TOOLRESULT_CONTRACT.md`. No production source implementation has started.
+- **Expected deliverable:** Implemented structured result types, factory invariants, registry-owned execution metadata, consistent ToolAgent outcomes, migrated handlers, and regression tests.
+- **Acceptance evidence to record:** Build and test results for each implementation step; factory invariant tests; registry timing and handler-invocation tests; all-status agent accounting; conversation compatibility; and preserved successful tool outputs.
+- **Guardrails:** Follow `PHASE1A_TOOLRESULT_CONTRACT.md`. Do not claim timeout or cancellation enforcement before it exists and is tested. Permission and confirmation design remains Phase 1B. Avoid unrelated refactoring.
 
 ## Phase 1A work sequence
 
-- [x] Inspect and document the existing tool execution architecture in `PHASE1A_TOOL_EXECUTION_AUDIT.md` (prepared and reviewed on this branch; commit, push and merge status are tracked separately).
-- [ ] Design and review the standard `ToolResult` contract before changing source code.
-- [ ] After the contract is agreed, plan small implementation steps and corresponding automated tests.
+- [x] Inspect and document the existing tool execution architecture in `PHASE1A_TOOL_EXECUTION_AUDIT.md` (merged through PR #6).
+- [x] Design and approve the standard `ToolResult` contract in `PHASE1A_TOOLRESULT_CONTRACT.md`.
+- [x] Define the incremental implementation sequence and test requirements in the approved contract.
+- [ ] Implement Step 1: core result types, factory methods, name conversion and focused unit tests.
 
 ---
 # 5. Supporting project records

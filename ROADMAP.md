@@ -18,7 +18,7 @@ The existing core application remains C++17. New components may use the language
 |---|---|---|
 | Phase 0 | Reconcile baseline, verify build/tests/voice/app tests, document current state | Complete; final documentation handoff merged through PR #4 and PR #5 |
 | Voice Engine 2.1 | Continuous Whisper/VAD voice, persistent native NVIDIA Qwen3-TTS, speech fallback, Windows app launching | Merged in PR #3 |
-| Phase 1A | Audit existing tool execution and design the standard tool contract | Audit documented on preparation branch; contract design next, not yet merged |
+| Phase 1A | Audit, approve the standard tool contract, implement and test the tool execution foundation | Audit merged in PR #6; ToolResult contract approved; implementation next |
 | Phase 1B | Permission levels and confirmation rules | Planned; depends on Phase 1A design |
 | Phase 1C | Structured diagnostics, health checks, recovery and worker lifecycle | Planned |
 
@@ -50,6 +50,8 @@ The existing core application remains C++17. New components may use the language
 
 ## Current next step
 
-Phase 0 is complete. Its final documentation handoff was merged through PR #5 on 8 November 2026 (merge commit `a81fc47`). The existing tool-execution architecture has been inspected and documented in `PHASE1A_TOOL_EXECUTION_AUDIT.md` on branch `docs/phase-1a-tool-execution-audit`. This audit work is documentation-only; production source implementation has not started, and the preparation branch has not yet been committed, pushed or merged.
+Phase 0 is complete. The Phase 1A architecture audit was merged through PR #6 on 8 November 2026, with merge commit `c91a582`.
 
-The next task is **Phase 1A — Design and agree on the standard `ToolResult` contract** before modifying source code. The design must cover structured outcomes, error semantics, execution metadata, timeout and cancellation outcomes, and the corresponding test requirements.
+The standard `ToolResult` contract is approved and documented in `PHASE1A_TOOLRESULT_CONTRACT.md` on branch `docs/phase-1a-toolresult-contract-design`. This branch contains documentation only; no production implementation has started.
+
+The next task is to complete the contract-design documentation handoff and then create an implementation branch from the merged baseline. Begin with the core `ToolStatus`, `ToolErrorCode`, and private-state `ToolResult` class, its factories, stable name-conversion functions, and focused unit tests.

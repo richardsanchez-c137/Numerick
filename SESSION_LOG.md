@@ -2,6 +2,41 @@
 
 This log records verified implementation and repository outcomes. It is intentionally concise; architecture rationale belongs in `DECISIONS.md`, while the current snapshot belongs in `CURRENT_STATE.md`.
 
+## 2026-11-08 — Phase 1A ToolResult contract approved
+
+### Scope
+
+Complete the design of the structured tool execution result contract before changing production interfaces.
+
+### Design decisions
+
+- Added `PHASE1A_TOOLRESULT_CONTRACT.md` and marked it approved for implementation.
+- Defined five statuses: `Succeeded`, `Failed`, `Rejected`, `TimedOut`, and `Cancelled`.
+- Defined stable error codes and factory validation rules.
+- Specified a private-state `ToolResult` class with factory methods and read-only accessors.
+- Made `ToolRegistry` the sole owner of execution metadata, including `steady_clock` duration and handler-invocation state.
+- Separated safe model/user-facing error messages from internal diagnostic details.
+- Defined mutually exclusive outcome counters and derived processed/not-executed accounting.
+- Documented the incremental implementation and regression-test sequence.
+
+### Review and verification
+
+- UTF-8 document content and key contract passages were checked.
+- No production source code was changed.
+- No fresh build, CTest run, or live Ollama verification was performed for this design.
+
+### Repository state
+
+- The Phase 1A architecture audit was merged through PR #6.
+- Merge commit: `c91a5829a85aa7b10539baedf29f95c912989426`.
+- Contract-design branch: `docs/phase-1a-toolresult-contract-design`.
+- The contract document and tracking updates are prepared for a documentation-only handoff.
+
+### Next work item
+
+Complete the documentation handoff, then create a separate implementation branch and implement Step 1 of the approved contract: core result types, factories, stable name conversion, and focused unit tests.
+
+---
 ## 2026-11-08 — Phase 1A architecture audit and contract-design preparation
 
 ### Scope
