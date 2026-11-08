@@ -50,25 +50,22 @@ void registerBuiltinTools(ToolRegistry& registry) {
         },
         [](const Json& arguments) -> ToolResult {
             if (!arguments.empty()) {
-                return {
-                    false,
+                return ToolResult::rejected(
+                    ToolErrorCode::InvalidArguments,
                     "get_local_time does not accept arguments."
-                };
+                );
             }
 
             const std::string timestamp = getLocalTimeString();
 
             if (timestamp.empty()) {
-                return {
-                    false,
+                return ToolResult::failed(
+                    ToolErrorCode::ResourceUnavailable,
                     "Unable to determine the local system time."
-                };
+                );
             }
 
-            return {
-                true,
-                timestamp
-            };
+            return ToolResult::succeeded(timestamp);
         }
     );
 }

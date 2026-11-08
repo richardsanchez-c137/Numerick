@@ -1,6 +1,8 @@
 
 #include "numerick/tool_registry.hpp"
 
+#include <chrono>
+
 #include <cctype>
 #include <exception>
 #include <stdexcept>
@@ -200,6 +202,29 @@ void ToolRegistry::registerTool(
     ToolDefinition definition,
     ToolHandler handler
 ) {
+    registerToolImpl(
+        std::move(definition),
+        std::move(handler),
+        {}
+    );
+}
+
+void ToolRegistry::registerTool(
+    ToolDefinition definition,
+    StructuredToolHandler handler
+) {
+    registerToolImpl(
+        std::move(definition),
+        {},
+        std::move(handler)
+    );
+}
+
+void ToolRegistry::registerToolImpl(
+    ToolDefinition definition,
+    ToolHandler legacyHandler,
+    StructuredToolHandler handler
+) {
     if (!isValidToolName(definition.name)) {
         throw std::invalid_argument(
             "Tool names must contain only letters, numbers, "
@@ -220,9 +245,10 @@ void ToolRegistry::registerTool(
         throw std::invalid_argument(schemaError);
     }
 
-    if (!handler) {
+    if (static_cast<bool>(legacyHandler) ==
+        static_cast<bool>(handler)) {
         throw std::invalid_argument(
-            "A tool must have a valid handler."
+            "A tool must have exactly one valid handler."
         );
     }
 
@@ -232,6 +258,7 @@ void ToolRegistry::registerTool(
         name,
         RegisteredTool{
             std::move(definition),
+            std::move(legacyHandler),
             std::move(handler)
         }
     );
@@ -262,13 +289,27 @@ ToolResult ToolRegistry::execute(
     const std::string& name,
     const Json& arguments
 ) const {
+    const auto started = std::chrono::steady_clock::now();
+    bool handlerInvoked = false;
+
+    const auto finish = [&](ToolResult result) {
+        ToolExecutionMetadata metadata;
+        metadata.duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started
+            );
+        metadata.handlerInvoked = handlerInvoked;
+        result.attachExecutionMetadata(std::move(metadata));
+        return result;
+    };
+
     const auto iterator = tools_.find(name);
 
     if (iterator == tools_.end()) {
-        return {
-            false,
+        return finish(ToolResult::rejected(
+            ToolErrorCode::UnknownTool,
             "Tool is not registered: " + name
-        };
+        ));
     }
 
     const std::string argumentError = validateArguments(
@@ -277,27 +318,64 @@ ToolResult ToolRegistry::execute(
     );
 
     if (!argumentError.empty()) {
-        return {
-            false,
+        return finish(ToolResult::rejected(
+            ToolErrorCode::InvalidArguments,
             argumentError
-        };
+        ));
     }
 
+    handlerInvoked = true;
+
     try {
-        return iterator->second.handler(arguments);
+        if (iterator->second.handler) {
+            return finish(iterator->second.handler(arguments));
+        }
+
+        LegacyToolResult legacy =
+            iterator->second.legacyHandler(arguments);
+
+        if (legacy.success) {
+            return finish(ToolResult::succeeded(
+                std::move(legacy.output)
+            ));
+        }
+
+        std::string message = legacy.output.empty()
+            ? "The tool reported an execution failure."
+            : std::move(legacy.output);
+
+        return finish(ToolResult::failed(
+            ToolErrorCode::ExecutionFailed,
+            std::move(message)
+        ));
     }
     catch (const std::exception& error) {
-        return {
-            false,
-            std::string("Tool execution failed: ") + error.what()
-        };
+        return finish(ToolResult::failed(
+            ToolErrorCode::InternalError,
+            "Tool execution failed unexpectedly.",
+            error.what()
+        ));
     }
     catch (...) {
-        return {
-            false,
-            "Tool execution failed with an unknown error."
-        };
+        return finish(ToolResult::failed(
+            ToolErrorCode::InternalError,
+            "Tool execution failed unexpectedly.",
+            "A non-standard exception was thrown."
+        ));
     }
+}
+
+LegacyToolResult ToolRegistry::executeLegacy(
+    const std::string& name,
+    const Json& arguments
+) const {
+    const ToolResult result = execute(name, arguments);
+
+    if (result.status() == ToolStatus::Succeeded) {
+        return {true, result.output()};
+    }
+
+    return {false, result.errorMessage()};
 }
 
 } // namespace numerick

@@ -14,7 +14,7 @@ using numerick::ChatClient;
 using numerick::Json;
 using numerick::ToolAgent;
 using numerick::ToolRegistry;
-using numerick::ToolResult;
+using numerick::LegacyToolResult;
 
 // Simulates model responses so tests do not require Ollama.
 class FakeChatClient final : public ChatClient {
@@ -97,7 +97,7 @@ static void registerEchoTool(
                 {"additionalProperties", false}
             }
         },
-        [executionCount](const Json& arguments) -> ToolResult {
+        [executionCount](const Json& arguments) -> LegacyToolResult {
             if (executionCount != nullptr) {
                 ++(*executionCount);
             }
@@ -131,7 +131,7 @@ static void registerRelationshipEvidenceTool(
                 {"additionalProperties", false}
             }
         },
-        [executionCount, evidence](const Json&) -> ToolResult {
+        [executionCount, evidence](const Json&) -> LegacyToolResult {
             if (executionCount != nullptr) {
                 ++(*executionCount);
             }
@@ -300,7 +300,7 @@ static void testHandlerFailureIsReported() {
             "A tool that deliberately fails in a test.",
             {{"type", "object"}}
         },
-        [](const Json&) -> ToolResult {
+        [](const Json&) -> LegacyToolResult {
             return {false, "Expected test failure."};
         }
     );
@@ -377,7 +377,7 @@ static void testRoundLimitPreventsExecution() {
             "Counts executions in a test.",
             {{"type", "object"}}
         },
-        [&executionCount](const Json&) -> ToolResult {
+        [&executionCount](const Json&) -> LegacyToolResult {
             ++executionCount;
             return {true, "executed"};
         }
@@ -415,7 +415,7 @@ static void testCallLimitPreventsExecution() {
             "Counts executions in a test.",
             {{"type", "object"}}
         },
-        [&executionCount](const Json&) -> ToolResult {
+        [&executionCount](const Json&) -> LegacyToolResult {
             ++executionCount;
             return {true, "executed"};
         }

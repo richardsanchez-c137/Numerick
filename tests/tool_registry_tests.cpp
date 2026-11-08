@@ -9,7 +9,7 @@
 using numerick::Json;
 using numerick::ToolDefinition;
 using numerick::ToolRegistry;
-using numerick::ToolResult;
+using numerick::LegacyToolResult;
 
 int main() {
     ToolRegistry registry;
@@ -29,7 +29,7 @@ int main() {
 
     registry.registerTool(
         echoDefinition,
-        [](const Json& arguments) -> ToolResult {
+        [](const Json& arguments) -> LegacyToolResult {
             if (!arguments.contains("text") ||
                 !arguments["text"].is_string()) {
                 return {
@@ -55,7 +55,7 @@ int main() {
     assert(definitions[0].name == "echo_text");
 
     // A registered handler executes successfully.
-    const auto success = registry.execute(
+    const auto success = registry.executeLegacy(
         "echo_text",
         {{"text", "NUMERICK tool test"}}
     );
@@ -63,8 +63,36 @@ int main() {
     assert(success.success);
     assert(success.output == "NUMERICK tool test");
 
+    const auto structuredSuccess = registry.execute(
+        "echo_text",
+        {{"text", "structured result"}}
+    );
+    assert(structuredSuccess.status() == numerick::ToolStatus::Succeeded);
+    assert(structuredSuccess.errorCode() == numerick::ToolErrorCode::None);
+    assert(structuredSuccess.output() == "structured result");
+    assert(structuredSuccess.execution().duration.has_value());
+    assert(structuredSuccess.execution().handlerInvoked);
+
+    const auto structuredUnknown = registry.execute(
+        "delete_everything",
+        Json::object()
+    );
+    assert(structuredUnknown.status() == numerick::ToolStatus::Rejected);
+    assert(structuredUnknown.errorCode() == numerick::ToolErrorCode::UnknownTool);
+    assert(structuredUnknown.execution().duration.has_value());
+    assert(!structuredUnknown.execution().handlerInvoked);
+
+    const auto structuredInvalid = registry.execute(
+        "echo_text",
+        Json::array()
+    );
+    assert(structuredInvalid.status() == numerick::ToolStatus::Rejected);
+    assert(structuredInvalid.errorCode() == numerick::ToolErrorCode::InvalidArguments);
+    assert(structuredInvalid.execution().duration.has_value());
+    assert(!structuredInvalid.execution().handlerInvoked);
+
     // Unknown tools must not execute.
-    const auto unknown = registry.execute(
+    const auto unknown = registry.executeLegacy(
         "delete_everything",
         Json::object()
     );
@@ -72,7 +100,7 @@ int main() {
     assert(!unknown.success);
 
     // Non-object arguments must be rejected.
-    const auto invalidArguments = registry.execute(
+    const auto invalidArguments = registry.executeLegacy(
         "echo_text",
         Json::array()
     );
@@ -80,7 +108,7 @@ int main() {
     assert(!invalidArguments.success);
 
     // Invalid arguments must be handled by the registered handler.
-    const auto missingText = registry.execute(
+    const auto missingText = registry.executeLegacy(
         "echo_text",
         Json::object()
     );
@@ -89,7 +117,7 @@ int main() {
 
     
     // Required arguments must be present.
-    const auto missingRequired = registry.execute(
+    const auto missingRequired = registry.executeLegacy(
         "echo_text",
         Json::object()
     );
@@ -100,7 +128,7 @@ int main() {
     ) != std::string::npos);
 
     // Argument types must match the declared schema.
-    const auto wrongType = registry.execute(
+    const auto wrongType = registry.executeLegacy(
         "echo_text",
         {{"text", 123}}
     );
@@ -111,7 +139,7 @@ int main() {
     ) != std::string::npos);
 
     // Additional arguments must be rejected when prohibited.
-    const auto unexpectedArgument = registry.execute(
+    const auto unexpectedArgument = registry.executeLegacy(
         "echo_text",
         {
             {"text", "hello"},
@@ -131,7 +159,7 @@ int main() {
     try {
         registry.registerTool(
             echoDefinition,
-            [](const Json&) -> ToolResult {
+            [](const Json&) -> LegacyToolResult {
                 return {true, "This should never replace the tool."};
             }
         );
@@ -149,20 +177,58 @@ int main() {
             "A controlled test for handler failures.",
             {{"type", "object"}}
         },
-        [](const Json&) -> ToolResult {
+        [](const Json&) -> LegacyToolResult {
             throw std::runtime_error("Expected test exception");
         }
     );
 
-    const auto failed = registry.execute(
+    const auto failed = registry.executeLegacy(
         "test_failure",
         Json::object()
     );
 
     assert(!failed.success);
-    assert(failed.output.find("Expected test exception")
+    const auto structuredFailure = registry.execute(
+        "test_failure",
+        Json::object()
+    );
+    assert(structuredFailure.status() == numerick::ToolStatus::Failed);
+    assert(structuredFailure.errorCode() == numerick::ToolErrorCode::InternalError);
+    assert(structuredFailure.execution().duration.has_value());
+    assert(structuredFailure.execution().handlerInvoked);
+    assert(structuredFailure.errorMessage() == "Tool execution failed unexpectedly.");
+    assert(structuredFailure.diagnosticDetails().find("Expected test exception")
            != std::string::npos);
 
+    assert(failed.output == "Tool execution failed unexpectedly.");
+    // Diagnostic exception details are intentionally not exposed by the legacy adapter.
+    // The structured result above retains them for controlled local diagnostics.
+    // Legacy exception text is not forwarded to model-facing responses.
+    //
+
+    registry.registerTool(
+        {
+            "native_rejection",
+            "Tests a native structured handler.",
+            {{"type", "object"}}
+        },
+        [](const Json&) -> numerick::ToolResult {
+            return numerick::ToolResult::rejected(
+                numerick::ToolErrorCode::PermissionDenied,
+                "Permission was denied."
+            );
+        }
+    );
+
+    const auto nativeRejected = registry.execute(
+        "native_rejection",
+        Json::object()
+    );
+    assert(nativeRejected.status() == numerick::ToolStatus::Rejected);
+    assert(nativeRejected.errorCode() == numerick::ToolErrorCode::PermissionDenied);
+    assert(nativeRejected.errorMessage() == "Permission was denied.");
+    assert(nativeRejected.execution().duration.has_value());
+    assert(nativeRejected.execution().handlerInvoked);
     std::cout << "All tool registry tests passed.\n";
 
     
@@ -181,7 +247,7 @@ int main() {
                     "An invalid schema used for testing.",
                     schema
                 },
-                [](const Json&) -> ToolResult {
+                [](const Json&) -> LegacyToolResult {
                     return {true, "This handler must not run."};
                 }
             );
