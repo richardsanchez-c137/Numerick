@@ -8,6 +8,7 @@
 #include "numerick/project_file_tools.hpp"
 #include "numerick/tool_agent.hpp"
 #include "numerick/tool_registry.hpp"
+#include "numerick/tool_result.hpp"
 #include "numerick/voice.hpp"
 #include <charconv>
 #include <chrono>
@@ -20,6 +21,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -334,11 +336,90 @@ void handleVoiceCommand() {
                     << report.modelRequests
                     << ", tool_rounds="
                     << report.toolRounds
-                    << ", tool_calls="
+                    << ", tool_calls_requested="
                     << report.toolCallsRequested
+                    << ", processed=" << report.toolCallsProcessed()
+                    << ", not_executed=" << report.toolCallsNotExecuted()
+                    << ", succeeded=" << report.toolCallsSucceeded
+                    << ", failed=" << report.toolCallsFailed
+                    << ", rejected=" << report.toolCallsRejected
+                    << ", timed_out=" << report.toolCallsTimedOut
+                    << ", cancelled=" << report.toolCallsCancelled
                     << '\n';
 
-                log("Continuous voice agent request completed");
+                for (const auto& event : report.toolCalls) {
+                    std::cout
+                        << "  - " << event.name
+                        << ": status=" << numerick::toolStatusName(event.status)
+                        << ", error_code=" << numerick::toolErrorCodeName(event.errorCode)
+                        << ", duration_ms=";
+
+                    if (event.duration.has_value()) {
+                        std::cout << event.duration->count();
+                    }
+                    else {
+                        std::cout << "unavailable";
+                    }
+
+                    std::cout
+                        << ", handler_invoked="
+                        << (event.handlerInvoked ? "true" : "false");
+
+                    if (!event.errorMessage.empty()) {
+                        std::cout << ", error_message=" << event.errorMessage;
+                    }
+
+                    std::cout << '\n';
+                }
+
+                log(
+                    "Continuous voice agent diagnostics: model_requests=" +
+                    std::to_string(report.modelRequests) +
+                    ", tool_rounds=" +
+                    std::to_string(report.toolRounds) +
+                    ", tool_calls_requested=" +
+                    std::to_string(report.toolCallsRequested) +
+                    ", tool_calls_processed=" +
+                    std::to_string(report.toolCallsProcessed()) +
+                    ", tool_calls_not_executed=" +
+                    std::to_string(report.toolCallsNotExecuted()) +
+                    ", tool_calls_succeeded=" +
+                    std::to_string(report.toolCallsSucceeded) +
+                    ", tool_calls_failed=" +
+                    std::to_string(report.toolCallsFailed) +
+                    ", tool_calls_rejected=" +
+                    std::to_string(report.toolCallsRejected) +
+                    ", tool_calls_timed_out=" +
+                    std::to_string(report.toolCallsTimedOut) +
+                    ", tool_calls_cancelled=" +
+                    std::to_string(report.toolCallsCancelled)
+                );
+
+                for (const auto& event : report.toolCalls) {
+                    std::string entry =
+                        "Voice tool diagnostic: name=" + event.name +
+                        ", status=" +
+                        std::string(numerick::toolStatusName(event.status)) +
+                        ", error_code=" +
+                        std::string(numerick::toolErrorCodeName(event.errorCode)) +
+                        ", handler_invoked=" +
+                        (event.handlerInvoked ? "true" : "false");
+
+                    entry += ", duration_ms=";
+
+                    if (event.duration.has_value()) {
+                        entry += std::to_string(event.duration->count());
+                    }
+                    else {
+                        entry += "unavailable";
+                    }
+
+                    if (!event.errorMessage.empty()) {
+                        entry += ", error_message=" + event.errorMessage;
+                    }
+
+                    log(entry);
+                }
             }
             catch (const std::exception& error) {
                 std::cout
@@ -519,15 +600,40 @@ bool handleCommand(const numerick::ParsedCommand& command) {
                 std::cout
                     << "[Agent diagnostics] model_requests=" << report.modelRequests
                     << ", tool_rounds=" << report.toolRounds
-                    << ", tool_calls=" << report.toolCallsRequested
-                    << " (succeeded=" << report.toolCallsSucceeded
+                    << ", tool_calls_requested=" << report.toolCallsRequested
+                    << " (processed=" << report.toolCallsProcessed()
+                    << ", not_executed=" << report.toolCallsNotExecuted()
+                    << ", succeeded=" << report.toolCallsSucceeded
                     << ", failed=" << report.toolCallsFailed
                     << ", rejected=" << report.toolCallsRejected
+                    << ", timed_out=" << report.toolCallsTimedOut
+                    << ", cancelled=" << report.toolCallsCancelled
                     << "), stop_reason=" << stopReasonName(report.stopReason)
                     << '\n';
                 for (const auto& event : report.toolCalls) {
-                    std::cout << "  - " << event.name << ": "
-                              << event.outcome << '\n';
+                    std::cout << "  - " << event.name
+                            << ": status="
+                            << numerick::toolStatusName(event.status)
+                            << ", error_code="
+                            << numerick::toolErrorCodeName(event.errorCode)
+                            << ", duration_ms=";
+
+                    if (event.duration.has_value()) {
+                        std::cout << event.duration->count();
+                    }
+                    else {
+                        std::cout << "unavailable";
+                    }
+
+                    std::cout
+                        << ", handler_invoked="
+                        << (event.handlerInvoked ? "true" : "false");
+
+                    if (!event.errorMessage.empty()) {
+                        std::cout << ", error_message=" << event.errorMessage;
+                    }
+
+                    std::cout << '\n';
                 }
 
                 log(
@@ -537,21 +643,47 @@ bool handleCommand(const numerick::ParsedCommand& command) {
                     std::to_string(report.toolRounds) +
                     ", tool_calls_requested=" +
                     std::to_string(report.toolCallsRequested) +
+                    ", tool_calls_processed=" +
+                    std::to_string(report.toolCallsProcessed()) +
+                    ", tool_calls_not_executed=" +
+                    std::to_string(report.toolCallsNotExecuted()) +
                     ", tool_calls_succeeded=" +
                     std::to_string(report.toolCallsSucceeded) +
                     ", tool_calls_failed=" +
                     std::to_string(report.toolCallsFailed) +
                     ", tool_calls_rejected=" +
                     std::to_string(report.toolCallsRejected) +
+                    ", tool_calls_timed_out=" +
+                    std::to_string(report.toolCallsTimedOut) +
+                    ", tool_calls_cancelled=" +
+                    std::to_string(report.toolCallsCancelled) +
                     ", stop_reason=" +
                     stopReasonName(report.stopReason)
                 );
 
                 for (const auto& event : report.toolCalls) {
-                    log(
-                        "Agent tool outcome: " +
-                        event.name + " / " + event.outcome
-                    );
+                    std::string entry =
+                        "Agent tool diagnostic: name=" + event.name +
+                        ", status=" +
+                        std::string(numerick::toolStatusName(event.status)) +
+                        ", error_code=" +
+                        std::string(numerick::toolErrorCodeName(event.errorCode)) +
+                        ", handler_invoked=" +
+                        (event.handlerInvoked ? "true" : "false");
+
+                    if (event.duration.has_value()) {
+                        entry += ", duration_ms=" +
+                            std::to_string(event.duration->count());
+                    }
+                    else {
+                        entry += ", duration_ms=unavailable";
+                    }
+
+                    if (!event.errorMessage.empty()) {
+                        entry += ", error_message=" + event.errorMessage;
+                    }
+
+                    log(entry);
                 }
             }
             catch (const std::exception& error) {

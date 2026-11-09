@@ -1,8 +1,12 @@
 #pragma once
 
+#include "numerick/tool_result.hpp"
+
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -20,7 +24,14 @@ enum class AgentStopReason {
 
 struct ToolCallDiagnostic {
     std::string name;
-    std::string outcome;
+
+    ToolStatus status = ToolStatus::Failed;
+    ToolErrorCode errorCode = ToolErrorCode::InternalError;
+
+    std::optional<std::chrono::milliseconds> duration;
+    bool handlerInvoked = false;
+
+    std::string errorMessage;
 };
 
 struct AgentRunReport {

@@ -177,10 +177,15 @@ void recordToolResult(
             break;
     }
 
-    report.toolCalls.push_back({
-        toolName,
-        std::string(toolStatusName(result.status()))
-    });
+    ToolCallDiagnostic diagnostic;
+    diagnostic.name = toolName;
+    diagnostic.status = result.status();
+    diagnostic.errorCode = result.errorCode();
+    diagnostic.duration = result.execution().duration;
+    diagnostic.handlerInvoked = result.execution().handlerInvoked;
+    diagnostic.errorMessage = result.errorMessage();
+
+    report.toolCalls.push_back(std::move(diagnostic));
 }
 
 } // namespace

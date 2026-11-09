@@ -171,7 +171,7 @@ static void testSuccessfulToolCycle() {
 
     assert(report.toolCalls.size() == 1);
     assert(report.toolCalls[0].name == "echo_text");
-    assert(report.toolCalls[0].outcome == "succeeded");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Succeeded);
 
     const Json& followUp = ai.seenMessages[1];
     assert(followUp.back()["role"] == "tool");
@@ -202,7 +202,7 @@ static void testUnknownToolIsRejected() {
     assert(report.toolCallsRejected == 1);
     assert(report.toolCallsSucceeded == 0);
     assert(report.toolCalls.size() == 1);
-    assert(report.toolCalls[0].outcome == "rejected");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Rejected);
 
     const Json& resultMessage = ai.seenMessages[1].back();
 
@@ -239,7 +239,7 @@ static void testMalformedArgumentsAreRejected() {
     assert(report.toolCallsRejected == 1);
     assert(report.toolCallsSucceeded == 0);
     assert(report.toolCalls.size() == 1);
-    assert(report.toolCalls[0].outcome == "rejected");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Rejected);
 
     assert(executionCount == 0);
 
@@ -278,7 +278,7 @@ static void testSchemaFailureIsReported() {
     assert(report.toolCallsSucceeded == 0);
     assert(report.toolCallsFailed == 0);
     assert(report.toolCalls.size() == 1);
-    assert(report.toolCalls[0].outcome == "rejected");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Rejected);
 
     assert(executionCount == 0);
 
@@ -328,7 +328,7 @@ static void testHandlerFailureIsReported() {
     assert(report.toolCallsSucceeded == 0);
     assert(report.toolCallsRejected == 0);
     assert(report.toolCalls.size() == 1);
-    assert(report.toolCalls[0].outcome == "failed");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Failed);
 
     const Json& resultMessage = ai.seenMessages[1].back();
 
@@ -502,8 +502,8 @@ static void testRelationshipToolResultIsReturnedDirectlyAndRejectsWrongClass() {
     assert(report.toolCallsFailed == 0);
     assert(report.toolCallsSucceeded == 1);
     assert(report.toolCalls.size() == 2);
-    assert(report.toolCalls[0].outcome == "rejected");
-    assert(report.toolCalls[1].outcome == "succeeded");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Rejected);
+    assert(report.toolCalls[1].status == numerick::ToolStatus::Succeeded);
     assert(executionCount == 1);
     assert(ai.seenMessages.size() == 2);
     assert(ai.seenMessages[1].back()["role"] == "tool");
@@ -569,7 +569,7 @@ static void testRelationshipPromptRoutesBeforeModel() {
     assert(report.toolCallsFailed == 0);
     assert(report.toolCalls.size() == 1);
     assert(report.toolCalls[0].name == "inspect_cpp_member_relationship");
-    assert(report.toolCalls[0].outcome == "succeeded");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Succeeded);
     assert(ai.seenMessages.empty());
     assert(executionCount == 1);
     assert(report.turnMessages.size() == 1);
@@ -708,11 +708,11 @@ static void testAllStructuredStatusesAreCounted() {
     );
 
     assert(report.toolCalls.size() == 5);
-    assert(report.toolCalls[0].outcome == "succeeded");
-    assert(report.toolCalls[1].outcome == "failed");
-    assert(report.toolCalls[2].outcome == "rejected");
-    assert(report.toolCalls[3].outcome == "timed_out");
-    assert(report.toolCalls[4].outcome == "cancelled");
+    assert(report.toolCalls[0].status == numerick::ToolStatus::Succeeded);
+    assert(report.toolCalls[1].status == numerick::ToolStatus::Failed);
+    assert(report.toolCalls[2].status == numerick::ToolStatus::Rejected);
+    assert(report.toolCalls[3].status == numerick::ToolStatus::TimedOut);
+    assert(report.toolCalls[4].status == numerick::ToolStatus::Cancelled);
 }
 
 static void testSuccessfulRelationshipEarlyReturnAccountsRemainingCalls() {
