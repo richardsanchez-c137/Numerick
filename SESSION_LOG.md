@@ -2,6 +2,51 @@
 
 This log records verified implementation and repository outcomes. It is intentionally concise; architecture rationale belongs in `DECISIONS.md`, while the current snapshot belongs in `CURRENT_STATE.md`.
 
+## 2026-11-09 — Phase 1A Step 5 implemented, verified, committed and pushed
+
+### Scope
+
+Complete typed per-tool diagnostics and update text/voice console and activity-log reporting while preserving the existing Ollama conversation protocol.
+
+### Implementation
+
+- Expanded `ToolCallDiagnostic` to retain tool name, typed `ToolStatus`, typed `ToolErrorCode`, optional execution duration, `handlerInvoked` and safe `errorMessage` when present.
+- Updated `recordToolResult()` to propagate structured result fields and registry-owned execution metadata. Internal `diagnosticDetails` are not copied into the per-tool diagnostic.
+- Updated text-agent and continuous-voice aggregate diagnostics with requested, processed, not-executed and all five status counts.
+- Updated per-tool console and `activity.log` reporting for both text and voice paths with status, error code, duration, handler invocation and non-empty safe error message.
+- Kept Ollama tool-message construction and conversation protocol unchanged.
+
+### Changed files
+
+- `include/numerick/tool_agent.hpp`
+- `src/core/tool_agent.cpp`
+- `src/main.cpp`
+- `tests/tool_agent_tests.cpp`
+
+### Verification evidence
+
+- `cmake --build .\build-release --parallel` — passed.
+- Focused tests: `ctest --test-dir .\build-release -R "tool_agent_tests|tool_agent_conversation_tests" --output-on-failure` — 2/2 passed.
+- Full CTest suite: `ctest --test-dir .\build-release --output-on-failure` — 12/12 passed.
+- `git diff --check` — passed.
+- No fresh live Ollama or continuous-voice runtime smoke test was performed specifically for this change.
+
+### Repository state
+
+- Commit: `8d3a206` — `feat: add structured tool execution diagnostics`.
+- Pushed successfully to `feat/phase-1a-diagnostics-compatibility` on 9 November 2026.
+- The commit is not yet merged into `main`; no PR merge is claimed.
+
+### Current work item
+
+**Phase 1A — Step 6: Regression tests.**
+
+Add explicit assertions for diagnostic metadata propagation, agent-level pre-registry rejection metadata, all five statuses, counter equations, early returns, conversation compatibility and successful output preservation.
+
+Timeout/cancellation enforcement and Phase 1B permissions remain separate work.
+
+---
+
 ## 2026-11-09 — Phase 1A Step 4 merged; Step 5 started
 
 ### Scope

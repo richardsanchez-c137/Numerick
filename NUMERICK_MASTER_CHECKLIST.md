@@ -659,15 +659,16 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 > Update this panel whenever the active task changes. There must be only one active work item.
 
 - **Current phase:** Phase 1 — Reliability, safety and tool foundations.
-- **Current work item:** Phase 1A — Step 5: Diagnostics and conversation compatibility.
-- **Status:** Steps 1–4 implemented, tested, committed, pushed and merged. Step 5 is the only active implementation item.
+- **Current work item:** Phase 1A — Step 6: Regression tests.
+- **Status:** Steps 1–4 are merged into `main`. Step 5 is implemented, built, tested, committed (`8d3a206`) and pushed to the feature branch; it is not yet merged. Step 6 is the only active implementation item. Step 7 remains open.
 - **Implementation branch:** `feat/phase-1a-diagnostics-compatibility`.
 - **Base commit:** `20aeabc` — PR #9 merge into `main`.
-- **Expected deliverable:** Typed per-tool diagnostics containing tool name, status, error code, duration, handler-invocation state and safe error message. Console and activity-log reporting must expose the appropriate diagnostic fields without leaking internal diagnostic details.
-- **Files/modules in scope:** `include/numerick/tool_agent.hpp`, `src/core/tool_agent.cpp`, `src/main.cpp`, `tests/tool_agent_tests.cpp`, and `tests/tool_agent_conversation_tests.cpp`.
-- **Dependencies:** Approved `PHASE1A_TOOLRESULT_CONTRACT.md`; Steps 1–4 are merged into `main`.
-- **Test procedure:** Focused ToolAgent and conversation tests after each change, followed by full CTest verification.
-- **Acceptance evidence:** Typed diagnostics retain all required fields; status and error-code names use centralized conversion functions; registry execution metadata is propagated; agent-level rejections correctly retain unavailable duration and `handlerInvoked = false`; internal diagnostic details never enter Ollama messages or conversation history; existing tool-message protocol and successful textual outputs remain unchanged.
+- **Step 5 implementation commit:** `8d3a206` — `feat: add structured tool execution diagnostics` (pushed; not yet PR-merged).
+- **Expected deliverable:** Focused regression coverage for all five statuses, counter equations, early returns, diagnostic metadata, conversation compatibility and successful output preservation.
+- **Files/modules in scope:** `tests/tool_agent_tests.cpp` and `tests/tool_agent_conversation_tests.cpp`.
+- **Dependencies:** Step 5 implementation commit `8d3a206` is pushed; the approved `PHASE1A_TOOLRESULT_CONTRACT.md` remains authoritative.
+- **Test procedure:** Run focused ToolAgent and conversation tests after changes, followed by full CTest verification.
+- **Acceptance evidence:** Tests verify diagnostic status, error code, optional duration, handler-invocation flag and safe error message; agent-level rejections retain unavailable duration and `handlerInvoked = false`; all five statuses, counter equations and early-return accounting remain correct; conversation compatibility and successful textual outputs are preserved.
 - **Guardrails:** Do not claim timeout or cancellation enforcement. Do not introduce permission prompts or unrelated logging infrastructure. Keep `LegacyToolResult` and `executeLegacy()` until all remaining consumers are migrated.
 
 ## Phase 1A work sequence
@@ -679,8 +680,8 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 - [x] **Step 2 – Tool registry:** Return structured outcomes, attach registry-owned duration and handler-invocation metadata, and distinguish validation, unknown-tool and execution failures. Commit `ccee489`.
 - [x] **Step 3 – Existing tool migration:** Migrate built-in, application and all seven project-file handlers. Commits `94c1033` and `ce721a2`.
 - [x] **Step 4 – ToolAgent integration:** Migrate deterministic and model-directed execution paths; classify all five statuses; implement derived processed/not-executed accounting and early-return handling. Merged through PR #9 (`29a9a0a`).
-- [ ] **Step 5 – Diagnostics and conversation compatibility (CURRENT ACTIVE ITEM):** Add typed per-tool diagnostic metadata, update console and activity-log reporting, and preserve conversation privacy and Ollama compatibility.
-- [ ] **Step 6 – Regression tests:** Cover all five statuses, counter equations, early returns, conversation compatibility and successful output preservation.
+- [x] **Step 5 – Diagnostics and conversation compatibility:** Add typed per-tool diagnostic metadata, update console and activity-log reporting, and preserve conversation privacy and Ollama compatibility. Implemented and verified locally; commit `8d3a206` pushed to `feat/phase-1a-diagnostics-compatibility` (not yet PR-merged).
+- [ ] **Step 6 – Regression tests (CURRENT ACTIVE ITEM):** Add explicit assertions for diagnostic metadata, all five statuses, counter equations, early returns, agent-level rejection metadata, conversation compatibility and successful output preservation.
 - [ ] **Step 7 – Integration verification:** Build, run complete CTest, perform appropriate manual checks and update project records with verified evidence.
 
 ---

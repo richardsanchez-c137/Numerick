@@ -3,7 +3,7 @@
 **Verified snapshot:** 9 November 2026<br>
 **Repository:** https://github.com/richardsanchez-c137/Numerick<br>
 **Project version:** `1.2.0`<br>
-**Feature milestone:** Phase 1A — Steps 1–4 merged; Step 5 diagnostics and conversation compatibility in progress<br>
+**Feature milestone:** Phase 1A — Steps 1–4 merged; Step 5 diagnostics implemented and pushed; Step 6 regression tests current<br>
 **Primary platform:** Windows<br>
 **Core language/build:** Existing C++17 core / CMake; component languages selected by technical fit (DEC-009)<br>
 **Status authority:** This file records observed repository, build, test and manual-run evidence. Planned capabilities are not described as implemented.
@@ -27,8 +27,10 @@
 | PR #9 files changed | 6 |
 | Current implementation branch | `feat/phase-1a-diagnostics-compatibility` |
 | Implementation branch base | `20aeabc` |
+| Step 5 implementation commit | `8d3a206` — `feat: add structured tool execution diagnostics` |
+| Step 5 remote status | Pushed to the feature branch on 9 November 2026; not yet PR-merged |
 | Local main synchronization | `git pull origin main` completed successfully on 9 November 2026 |
-| Working tree | Clean when the Step 5 branch was created; documentation updates are now in progress |
+| Working tree | Step 5 code and tests are committed and pushed; documentation closeout is in progress |
 
 PR #8 integrated Steps 1–3 of the approved Phase 1A ToolResult contract.
 
@@ -52,7 +54,7 @@ The local main branch was synchronized with origin/main at merge commit `20aeabc
 - Agent accounting tracks all five statuses independently: Succeeded, Failed, Rejected, TimedOut and Cancelled.
 - Processed and not-executed tool-call counts are derived from the requested-call and outcome counters.
 - Successful early returns account for remaining requested calls as not executed.
-- Per-tool diagnostics still retain only the tool name and outcome string. Typed status/error code, duration, handler-invocation metadata and safe error messages are the next implementation task.
+- `ToolCallDiagnostic` retains tool name, typed `ToolStatus`, typed `ToolErrorCode`, optional execution duration, `handlerInvoked` and the safe `errorMessage` when present. `recordToolResult()` propagates registry-owned execution metadata; internal `diagnosticDetails` are not copied into the public per-tool diagnostic.
 - Read-only workspace/project inspection tools remain available.
 - Explicit local persistent facts are separate from temporary conversation history. Memory remains opt-in and is not the complete memory/continuity system in the long-term roadmap.
 
@@ -74,6 +76,27 @@ The local main branch was synchronized with origin/main at merge commit `20aeabc
 - Matching logic has dedicated automated tests.
 
 ## 3. Build and test evidence
+
+### Phase 1A Step 5 — Diagnostics and conversation compatibility
+
+Implemented in feature commit `8d3a206` — `feat: add structured tool execution diagnostics` on `feat/phase-1a-diagnostics-compatibility`.
+
+The commit was pushed to the remote feature branch on 9 November 2026. It has not yet been merged into `main`; no PR merge is claimed in this snapshot.
+
+Implementation:
+- Expanded `ToolCallDiagnostic` with typed status and error code, optional duration, handler-invocation state and safe error message.
+- Updated ToolAgent result recording to propagate structured result fields and registry-owned execution metadata without copying internal `diagnosticDetails`.
+- Updated text and continuous-voice console diagnostics and activity logging with aggregate status counts and per-tool diagnostic metadata.
+- Kept the existing Ollama tool-message construction and conversation protocol unchanged.
+
+Verification performed on the feature branch:
+- `cmake --build .\build-release --parallel` — successful.
+- Focused tests: `ctest --test-dir .\build-release -R "tool_agent_tests|tool_agent_conversation_tests" --output-on-failure` — 2/2 passed.
+- Full suite: `ctest --test-dir .\build-release --output-on-failure` — 12/12 passed.
+- `git diff --check` — passed.
+- Four implementation files changed: `include/numerick/tool_agent.hpp`, `src/core/tool_agent.cpp`, `src/main.cpp` and `tests/tool_agent_tests.cpp`.
+
+No fresh live Ollama or continuous-voice runtime smoke test was performed specifically for this Step 5 change.
 
 ### Phase 1A ToolResult implementation — PR #8
 
@@ -154,9 +177,9 @@ This did not change the machine/user execution policy permanently. The native bu
 ## 5. Known limitations and open risks
 
 - Structured `ToolResult`, registry-owned execution metadata and native ToolAgent integration are implemented and merged through PRs #8 and #9.
-- Typed per-tool diagnostics containing error code, duration, handler-invocation state and safe error message remain pending.
+- Typed per-tool diagnostics are implemented: status, error code, optional duration, handler-invocation state and safe error message are available to console and activity reporting. Internal `diagnosticDetails` remain excluded from conversation-facing diagnostics.
+- The existing activity log now records aggregate agent counts and per-tool status, error code, duration, handler-invocation state and non-empty safe error message. Safely redacted tool arguments and distinct per-tool start/end events are not yet recorded.
 - Per-tool timeout enforcement and cancellation propagation are not implemented. The presence of `TimedOut` and `Cancelled` statuses does not provide enforcement.
-- Structured execution logging, including safely redacted arguments and per-tool start/end information, remains incomplete.
 - The permission/confirmation model, including risk levels and user approval before consequential actions, remains unimplemented.
 - The `384` speech-generation cap is a provisional safeguard. The two manual utterances passed, but substantially longer responses need additional testing to ensure natural completion and avoid unwanted truncation.
 - Voice latency, CPU/GPU/RAM utilization, repeated-turn stability and long-session reliability have not been comprehensively measured.
@@ -168,43 +191,39 @@ This did not change the machine/user execution policy permanently. The native bu
 
 ## 6. Next work item
 
-**Phase 1A — Step 5: Diagnostics and conversation compatibility.**
+**Phase 1A — Step 6: Regression tests.**
 
-Steps 1–4 of the approved ToolResult implementation sequence have been merged into `main`.
-
-PR #9 merged on 9 November 2026. Merge commit: `20aeabc`.
+Steps 1–4 of the approved ToolResult implementation sequence are merged into `main`. Step 5 is implemented and pushed as feature commit `8d3a206`; it is not yet merged into `main`.
 
 The approved implementation contract is documented in `PHASE1A_TOOLRESULT_CONTRACT.md`.
 
 **Current branch:** `feat/phase-1a-diagnostics-compatibility`
+
 **Base commit:** `20aeabc`
+
+**Step 5 implementation commit:** `8d3a206` (pushed; not yet PR-merged)
 
 ### Objective
 
-Expand ToolAgent per-tool diagnostics to preserve the complete structured execution metadata and update console/activity-log reporting without leaking internal diagnostics into conversation messages.
+Add explicit regression assertions for the expanded ToolAgent diagnostics and protect the structured-result, counter-accounting and conversation-compatibility guarantees.
 
 ### Scope
 
-- `include/numerick/tool_agent.hpp`
-- `src/core/tool_agent.cpp`
-- `src/main.cpp`
 - `tests/tool_agent_tests.cpp`
 - `tests/tool_agent_conversation_tests.cpp`
 
 ### Acceptance criteria
 
-- Per-tool diagnostics retain tool name, typed status and typed error code.
-- Diagnostics retain optional execution duration and handler-invocation state.
-- Safe error messages are available when present.
-- Status and error-code names use centralized conversion functions.
-- Agent-level rejections retain unavailable duration and `handlerInvoked = false`.
-- Internal `diagnosticDetails` never enter Ollama tool messages or conversation history.
-- Existing Ollama tool-message protocol and successful textual outputs remain unchanged.
-- Console and activity-log reporting expose the appropriate diagnostic metadata.
+- Tests verify the per-tool diagnostic name, typed status, typed error code, optional duration, handler-invocation state and safe error message.
+- Agent-level results created before registry submission retain unavailable duration and `handlerInvoked = false`.
+- All five statuses remain correctly represented and counted.
+- Processed/not-executed counter equations and successful early-return accounting remain correct.
+- Conversation tests preserve the Ollama tool-message protocol and successful textual outputs.
+- Internal `diagnosticDetails` are not exposed through conversation history or model-facing tool messages.
 
 Timeout and cancellation enforcement remain out of scope. Permission and confirmation design remains Phase 1B.
 
-After Step 5, proceed to Step 6 regression tests and Step 7 integration verification.
+After Step 6, proceed to Step 7 integration verification.
 
 ## 7. Verification commands
 
