@@ -1,9 +1,9 @@
 # NUMERICK — Current State
 
-**Verified snapshot:** 8 November 2026<br>
+**Verified snapshot:** 9 November 2026<br>
 **Repository:** https://github.com/richardsanchez-c137/Numerick<br>
 **Project version:** `1.2.0`<br>
-**Feature milestone:** Phase 1A — ToolResult execution foundation; ToolAgent integration in progress<br>
+**Feature milestone:** Phase 1A — Steps 1–4 merged; Step 5 diagnostics and conversation compatibility in progress<br>
 **Primary platform:** Windows<br>
 **Core language/build:** Existing C++17 core / CMake; component languages selected by technical fit (DEC-009)<br>
 **Status authority:** This file records observed repository, build, test and manual-run evidence. Planned capabilities are not described as implemented.
@@ -15,18 +15,26 @@
 | Main branch | `main` |
 | PR #8 | [feat: migrate tools to structured ToolResult](https://github.com/richardsanchez-c137/Numerick/pull/8) |
 | PR #8 state | Merged on 8 November 2026 |
-| PR #8 merge commit | `4355d9d` |
-| PR #8 final feature commit | `a55f65a` |
 | PR #8 commits | 5 |
 | PR #8 files changed | 15 |
-| Implementation branch | `feat/phase-1a-toolagent-integration` |
-| Implementation branch base | `4355d9d` |
-| Local main synchronization | `git pull origin main` completed successfully |
-| Working tree on the new branch | Documentation handoff changes only; no production source changes yet |
+| PR #8 merge commit | `4355d9d` |
+| PR #8 final feature commit | `a55f65a` |
+| PR #9 | [feat: integrate ToolResult into ToolAgent](https://github.com/richardsanchez-c137/Numerick/pull/9) |
+| PR #9 state | Merged on 8 November 2026 |
+| PR #9 merge commit | `20aeabc` |
+| PR #9 final feature commit | `29a9a0a` |
+| PR #9 commits | 2 |
+| PR #9 files changed | 6 |
+| Current implementation branch | `feat/phase-1a-diagnostics-compatibility` |
+| Implementation branch base | `20aeabc` |
+| Local main synchronization | `git pull origin main` completed successfully on 9 November 2026 |
+| Working tree | Clean when the Step 5 branch was created; documentation updates are now in progress |
 
-PR #8 integrated the first three implementation steps of the approved Phase 1A ToolResult contract. The latest merged implementation includes structured results, registry-owned execution metadata, migrated built-in/application/project-file handlers, and structured project-file error-classification tests.
+PR #8 integrated Steps 1–3 of the approved Phase 1A ToolResult contract.
 
-The local working environment was synchronized with `main` before creating the current implementation branch.
+PR #9 integrated Step 4: native structured ToolResult integration into ToolAgent, five-status outcome accounting, derived processed/not-executed counts and early-return accounting.
+
+The local main branch was synchronized with origin/main at merge commit `20aeabc` before creating the current Step 5 branch.
 
 ## 2. Implemented capabilities with current evidence
 
@@ -40,8 +48,11 @@ The local working environment was synchronized with `main` before creating the c
 - All nine registered tools have been migrated to structured handler results: `get_local_time`, `open_application` and seven project-file tools.
 - Project-file handlers classify invalid arguments, blocked paths, missing resources, resource limits and I/O failures.
 - Agent can request registered tools and enforces configured tool-round and tool-call limits.
-- `ToolAgent` still consumes `LegacyToolResult` through `executeLegacy()` in both its deterministic relationship-inspection route and normal model-directed execution. Native structured ToolAgent integration is the current work item.
-- Existing per-tool agent diagnostics still record name and outcome strings; typed status/error metadata and complete outcome accounting remain pending.
+- `ToolAgent` consumes native structured `ToolResult` values in both deterministic relationship-inspection and model-directed execution paths.
+- Agent accounting tracks all five statuses independently: Succeeded, Failed, Rejected, TimedOut and Cancelled.
+- Processed and not-executed tool-call counts are derived from the requested-call and outcome counters.
+- Successful early returns account for remaining requested calls as not executed.
+- Per-tool diagnostics still retain only the tool name and outcome string. Typed status/error code, duration, handler-invocation metadata and safe error messages are the next implementation task.
 - Read-only workspace/project inspection tools remain available.
 - Explicit local persistent facts are separate from temporary conversation history. Memory remains opt-in and is not the complete memory/continuity system in the long-term roadmap.
 
@@ -142,6 +153,11 @@ This did not change the machine/user execution policy permanently. The native bu
 
 ## 5. Known limitations and open risks
 
+- Structured `ToolResult`, registry-owned execution metadata and native ToolAgent integration are implemented and merged through PRs #8 and #9.
+- Typed per-tool diagnostics containing error code, duration, handler-invocation state and safe error message remain pending.
+- Per-tool timeout enforcement and cancellation propagation are not implemented. The presence of `TimedOut` and `Cancelled` statuses does not provide enforcement.
+- Structured execution logging, including safely redacted arguments and per-tool start/end information, remains incomplete.
+- The permission/confirmation model, including risk levels and user approval before consequential actions, remains unimplemented.
 - The `384` speech-generation cap is a provisional safeguard. The two manual utterances passed, but substantially longer responses need additional testing to ensure natural completion and avoid unwanted truncation.
 - Voice latency, CPU/GPU/RAM utilization, repeated-turn stability and long-session reliability have not been comprehensively measured.
 - Wake-word activation, reliable barge-in/interruption, configurable push-to-talk, and robust microphone-loss/noise recovery are not complete.
@@ -150,47 +166,45 @@ This did not change the machine/user execution policy permanently. The native bu
 - Persistent memory is basic explicit local fact storage, not the full episodic/project/preference/task memory system. It is local plaintext, not encrypted.
 - No general screen understanding, on-demand camera/document perception, source-grounded web research or proactive companion behavior is claimed as implemented.
 
-- Structured `ToolResult` and registry-owned execution metadata are implemented and merged. Full ToolAgent integration remains incomplete.
-- `ToolAgent` still uses `LegacyToolResult` and `executeLegacy()`. Dedicated timeout/cancellation accounting, typed diagnostics and derived processed/not-executed accounting remain pending.
-- Per-tool timeout enforcement and cancellation propagation are not implemented. The presence of `TimedOut` and `Cancelled` result statuses does not provide enforcement.
-- Structured execution logging, including safely redacted arguments and per-tool start/end information, remains incomplete.
-- The permission/confirmation model, including risk levels and user approval before consequential actions, remains unimplemented.
-
 ## 6. Next work item
 
-**Phase 1A — Step 4: ToolAgent integration.**
+**Phase 1A — Step 5: Diagnostics and conversation compatibility.**
 
-The ToolResult implementation foundation was merged into `main` through PR #8 on 8 November 2026. Merge commit: `4355d9d`.
+Steps 1–4 of the approved ToolResult implementation sequence have been merged into `main`.
+
+PR #9 merged on 9 November 2026. Merge commit: `20aeabc`.
 
 The approved implementation contract is documented in `PHASE1A_TOOLRESULT_CONTRACT.md`.
 
-**Current branch:** `feat/phase-1a-toolagent-integration`
-**Base commit:** `4355d9d`
+**Current branch:** `feat/phase-1a-diagnostics-compatibility`
+**Base commit:** `20aeabc`
 
 ### Objective
 
-Migrate ToolAgent to consume native structured `ToolResult` values in both deterministic and model-directed execution paths.
+Expand ToolAgent per-tool diagnostics to preserve the complete structured execution metadata and update console/activity-log reporting without leaking internal diagnostics into conversation messages.
 
 ### Scope
 
 - `include/numerick/tool_agent.hpp`
 - `src/core/tool_agent.cpp`
+- `src/main.cpp`
 - `tests/tool_agent_tests.cpp`
 - `tests/tool_agent_conversation_tests.cpp`
 
 ### Acceptance criteria
 
-- Handle all five statuses independently: Succeeded, Failed, Rejected, TimedOut and Cancelled.
-- Maintain mutually exclusive outcome counters.
-- Derive processed and not-executed counts consistently.
-- Account correctly for remaining calls when an execution path returns early.
-- Keep internal diagnostic details out of model-facing conversation messages.
-- Preserve existing Ollama tool-message compatibility and successful textual outputs.
-- Migrate the deterministic C++ relationship-inspection route to structured results.
+- Per-tool diagnostics retain tool name, typed status and typed error code.
+- Diagnostics retain optional execution duration and handler-invocation state.
+- Safe error messages are available when present.
+- Status and error-code names use centralized conversion functions.
+- Agent-level rejections retain unavailable duration and `handlerInvoked = false`.
+- Internal `diagnosticDetails` never enter Ollama tool messages or conversation history.
+- Existing Ollama tool-message protocol and successful textual outputs remain unchanged.
+- Console and activity-log reporting expose the appropriate diagnostic metadata.
 
-Timeout and cancellation enforcement are not part of this step. Permission and confirmation design remains Phase 1B.
+Timeout and cancellation enforcement remain out of scope. Permission and confirmation design remains Phase 1B.
 
-After Step 4, proceed to Step 5 diagnostics, Step 6 regression tests and Step 7 integration verification in the approved contract sequence.
+After Step 5, proceed to Step 6 regression tests and Step 7 integration verification.
 
 ## 7. Verification commands
 

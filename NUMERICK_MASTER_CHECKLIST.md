@@ -659,16 +659,16 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 > Update this panel whenever the active task changes. There must be only one active work item.
 
 - **Current phase:** Phase 1 — Reliability, safety and tool foundations.
-- **Current work item:** Phase 1A — Step 4: ToolAgent integration.
-- **Status:** Steps 1–3 implemented, tested, committed, pushed and merged through PR #8. Step 4 is the only active implementation item.
-- **Implementation branch:** `feat/phase-1a-toolagent-integration`.
-- **Base commit:** `4355d9d` — PR #8 merge into `main`.
-- **Expected deliverable:** ToolAgent consumes native structured ToolResult outcomes, classifies all five statuses, maintains mutually exclusive outcome counters, derives processed/not-executed accounting, and correctly accounts for early returns.
-- **Files/modules in scope:** `include/numerick/tool_agent.hpp`, `src/core/tool_agent.cpp`, `tests/tool_agent_tests.cpp`, and `tests/tool_agent_conversation_tests.cpp`.
-- **Dependencies:** Approved `PHASE1A_TOOLRESULT_CONTRACT.md`; Steps 1–3 are merged into main.
-- **Test procedure:** Relevant ToolAgent and conversation tests after each change, followed by full CTest verification.
-- **Acceptance evidence:** All five statuses handled separately; correct error messages in tool conversation messages; counter equations hold; unexecuted calls are not assigned fabricated outcomes; deterministic relationship routing uses structured results; existing successful outputs and Ollama conversation compatibility are preserved.
-- **Guardrails:** Do not claim timeout or cancellation enforcement. Keep diagnostic details out of model-facing messages. Do not remove `LegacyToolResult` or `executeLegacy()` until all remaining consumers and tests have been migrated. Permission and confirmation policy remains a separate Phase 1B work item.
+- **Current work item:** Phase 1A — Step 5: Diagnostics and conversation compatibility.
+- **Status:** Steps 1–4 implemented, tested, committed, pushed and merged. Step 5 is the only active implementation item.
+- **Implementation branch:** `feat/phase-1a-diagnostics-compatibility`.
+- **Base commit:** `20aeabc` — PR #9 merge into `main`.
+- **Expected deliverable:** Typed per-tool diagnostics containing tool name, status, error code, duration, handler-invocation state and safe error message. Console and activity-log reporting must expose the appropriate diagnostic fields without leaking internal diagnostic details.
+- **Files/modules in scope:** `include/numerick/tool_agent.hpp`, `src/core/tool_agent.cpp`, `src/main.cpp`, `tests/tool_agent_tests.cpp`, and `tests/tool_agent_conversation_tests.cpp`.
+- **Dependencies:** Approved `PHASE1A_TOOLRESULT_CONTRACT.md`; Steps 1–4 are merged into `main`.
+- **Test procedure:** Focused ToolAgent and conversation tests after each change, followed by full CTest verification.
+- **Acceptance evidence:** Typed diagnostics retain all required fields; status and error-code names use centralized conversion functions; registry execution metadata is propagated; agent-level rejections correctly retain unavailable duration and `handlerInvoked = false`; internal diagnostic details never enter Ollama messages or conversation history; existing tool-message protocol and successful textual outputs remain unchanged.
+- **Guardrails:** Do not claim timeout or cancellation enforcement. Do not introduce permission prompts or unrelated logging infrastructure. Keep `LegacyToolResult` and `executeLegacy()` until all remaining consumers are migrated.
 
 ## Phase 1A work sequence
 
@@ -678,8 +678,8 @@ Do not start continuous visual surveillance, unrestricted computer control or au
 - [x] **Step 1 – Core result type:** Implement statuses, error codes, private-state result class, factories, name conversion and focused tests. Commit `c510abe`.
 - [x] **Step 2 – Tool registry:** Return structured outcomes, attach registry-owned duration and handler-invocation metadata, and distinguish validation, unknown-tool and execution failures. Commit `ccee489`.
 - [x] **Step 3 – Existing tool migration:** Migrate built-in, application and all seven project-file handlers. Commits `94c1033` and `ce721a2`.
-- [ ] **Step 4 – ToolAgent integration (CURRENT ACTIVE ITEM):** Migrate both deterministic and model-directed execution paths; classify all five statuses; add timeout/cancellation counters; implement derived processed/not-executed accounting and early-return handling.
-- [ ] **Step 5 – Diagnostics and conversation compatibility:** Add typed per-tool diagnostics with status, error code, duration and handler-invocation state. Preserve the Ollama tool-message protocol and keep internal diagnostics private.
+- [x] **Step 4 – ToolAgent integration:** Migrate deterministic and model-directed execution paths; classify all five statuses; implement derived processed/not-executed accounting and early-return handling. Merged through PR #9 (`29a9a0a`).
+- [ ] **Step 5 – Diagnostics and conversation compatibility (CURRENT ACTIVE ITEM):** Add typed per-tool diagnostic metadata, update console and activity-log reporting, and preserve conversation privacy and Ollama compatibility.
 - [ ] **Step 6 – Regression tests:** Cover all five statuses, counter equations, early returns, conversation compatibility and successful output preservation.
 - [ ] **Step 7 – Integration verification:** Build, run complete CTest, perform appropriate manual checks and update project records with verified evidence.
 
