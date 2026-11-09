@@ -240,6 +240,20 @@ static void testMalformedArgumentsAreRejected() {
     assert(report.toolCallsSucceeded == 0);
     assert(report.toolCalls.size() == 1);
     assert(report.toolCalls[0].status == numerick::ToolStatus::Rejected);
+    assert(
+    report.toolCalls[0].name == "__invalid_tool_call__"
+    );
+    assert(
+        report.toolCalls[0].errorCode ==
+        numerick::ToolErrorCode::MalformedRequest
+    );
+    assert(!report.toolCalls[0].duration.has_value());
+    assert(!report.toolCalls[0].handlerInvoked);
+    assert(
+        report.toolCalls[0].errorMessage ==
+        "The tool request was malformed. "
+        "A string name and object arguments are required."
+    );
 
     assert(executionCount == 0);
 
@@ -503,6 +517,27 @@ static void testRelationshipToolResultIsReturnedDirectlyAndRejectsWrongClass() {
     assert(report.toolCallsSucceeded == 1);
     assert(report.toolCalls.size() == 2);
     assert(report.toolCalls[0].status == numerick::ToolStatus::Rejected);
+    assert(
+        report.toolCalls[0].name ==
+        "inspect_cpp_member_relationship"
+    );
+    assert(
+        report.toolCalls[0].status ==
+        numerick::ToolStatus::Rejected
+    );
+    assert(
+        report.toolCalls[0].errorCode ==
+        numerick::ToolErrorCode::InvalidArguments
+    );
+    assert(!report.toolCalls[0].duration.has_value());
+    assert(!report.toolCalls[0].handlerInvoked);
+    assert(
+        report.toolCalls[0].errorMessage ==
+        "Relationship lookup argument 'class_a'='Owner' was not "
+        "mentioned in the current user request. Use the exact "
+        "class/member identifiers from the user's question; do not "
+        "substitute a test fixture or a similarly named type."
+    );
     assert(report.toolCalls[1].status == numerick::ToolStatus::Succeeded);
     assert(executionCount == 1);
     assert(ai.seenMessages.size() == 2);
@@ -713,6 +748,55 @@ static void testAllStructuredStatusesAreCounted() {
     assert(report.toolCalls[2].status == numerick::ToolStatus::Rejected);
     assert(report.toolCalls[3].status == numerick::ToolStatus::TimedOut);
     assert(report.toolCalls[4].status == numerick::ToolStatus::Cancelled);
+
+    // Successful result.
+assert(report.toolCalls[0].name == "native_success");
+assert(
+    report.toolCalls[0].errorCode ==
+    numerick::ToolErrorCode::None
+);
+assert(report.toolCalls[0].duration.has_value());
+assert(report.toolCalls[0].handlerInvoked);
+assert(report.toolCalls[0].errorMessage.empty());
+
+// Failed result.
+assert(
+    report.toolCalls[1].errorCode ==
+    numerick::ToolErrorCode::ExecutionFailed
+);
+assert(report.toolCalls[1].duration.has_value());
+assert(report.toolCalls[1].handlerInvoked);
+assert(
+    report.toolCalls[1].errorMessage ==
+    "Expected operational failure."
+);
+
+// Rejected result returned by a handler.
+assert(
+    report.toolCalls[2].errorCode ==
+    numerick::ToolErrorCode::PermissionDenied
+);
+assert(report.toolCalls[2].duration.has_value());
+assert(report.toolCalls[2].handlerInvoked);
+assert(report.toolCalls[2].errorMessage == "Permission denied.");
+
+// Timed-out result.
+assert(
+    report.toolCalls[3].errorCode ==
+    numerick::ToolErrorCode::Timeout
+);
+assert(report.toolCalls[3].duration.has_value());
+assert(report.toolCalls[3].handlerInvoked);
+assert(report.toolCalls[3].errorMessage == "Test timeout.");
+
+// Cancelled result.
+assert(
+    report.toolCalls[4].errorCode ==
+    numerick::ToolErrorCode::Cancelled
+);
+assert(report.toolCalls[4].duration.has_value());
+assert(report.toolCalls[4].handlerInvoked);
+assert(report.toolCalls[4].errorMessage == "Test cancellation.");
 }
 
 static void testSuccessfulRelationshipEarlyReturnAccountsRemainingCalls() {

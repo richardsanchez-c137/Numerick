@@ -160,6 +160,84 @@ static void testToolCallAndResultAppearInTranscript() {
     assert(ai.seenMessages[1][3]["role"] == "tool");
 }
 
+static void testInternalDiagnosticDetailsNeverEnterConversation() {
+    ToolRegistry registry;
+
+    const std::string internalDiagnostic =
+        "SECRET_INTERNAL_DIAGNOSTICS_SENTINEL";
+
+    registry.registerTool(
+        {
+            "diagnostic_failure",
+            "A test tool with separate internal diagnostics.",
+            {{"type", "object"}}
+        },
+        [](const Json&) {
+            return numerick::ToolResult::failed(
+                numerick::ToolErrorCode::ExecutionFailed,
+                "Safe public failure message.",
+                "SECRET_INTERNAL_DIAGNOSTICS_SENTINEL"
+            );
+        }
+    );
+
+    ScriptedChatClient ai({
+        toolRequest(Json::array({
+            {
+                {"id", "call_diagnostic_failure"},
+                {"type", "function"},
+                {"function", {
+                    {"name", "diagnostic_failure"},
+                    {"arguments", Json::object()}
+                }}
+            }
+        })),
+        finalAnswer("The failure was handled safely.")
+    });
+
+    ToolAgent agent(ai, registry);
+
+    const auto report =
+        agent.runWithConversationDiagnostics(initialConversation());
+
+    assert(report.toolCalls.size() == 1);
+    assert(
+        report.toolCalls[0].status ==
+        numerick::ToolStatus::Failed
+    );
+    assert(
+        report.toolCalls[0].errorCode ==
+        numerick::ToolErrorCode::ExecutionFailed
+    );
+    assert(
+        report.toolCalls[0].errorMessage ==
+        "Safe public failure message."
+    );
+
+    assert(report.turnMessages.size() == 3);
+    assert(report.turnMessages[1]["role"] == "tool");
+    assert(
+        report.turnMessages[1]["content"] ==
+        "Tool error: Safe public failure message."
+    );
+
+    // Internal diagnostic details must never reach conversation history.
+    const std::string transcript = report.turnMessages.dump();
+
+    assert(
+        transcript.find(internalDiagnostic) ==
+        std::string::npos
+    );
+
+    // They must also remain absent from every model request.
+    for (const auto& messages : ai.seenMessages) {
+        assert(
+            messages.dump().find(internalDiagnostic) ==
+            std::string::npos
+        );
+    }
+}
+
 static void testLimitStopStillReturnsARecordableAssistantMessage() {
     ToolRegistry registry;
     registerEchoTool(registry);
@@ -224,6 +302,9 @@ int main() {
 
     std::cout << "Running tool-transcript test..." << std::endl;
     testToolCallAndResultAppearInTranscript();
+
+    std::cout << "Running diagnostic-privacy test..." << std::endl;
+    testInternalDiagnosticDetailsNeverEnterConversation();
 
     std::cout << "Running execution-limit test..." << std::endl;
     testLimitStopStillReturnsARecordableAssistantMessage();
